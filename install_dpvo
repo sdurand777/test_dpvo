@@ -1,0 +1,14 @@
+
+
+mamba install libffi
+mamba install wayland
+pip install plyfile
+pip install yacs
+
+ajouter
+ln -s /usr/lib/x86_64-linux-gnu/libstdc++.so.6 /home/ivm/conda/envs/slam_exp/liblibstdc++.so.6
+
+./download_data
+pip install .
+pip install ./ViewerDPVO
+
