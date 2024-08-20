@@ -10,5 +10,5 @@ make -j8
 sudo make install
 cd ../..
 
-pip install ./DPViewer
+pip install ./ViewerDPVO
 ldconfig
