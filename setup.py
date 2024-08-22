@@ -18,12 +18,13 @@ setup(
     ext_modules=[
         CUDAExtension('droid_backends',
             include_dirs=[osp.join(ROOT, 'thirdparty/eigen-3.4.0')],
-            sources=[
-                'src/droid.cpp', 
-                'src/droid_kernels.cu',
-                'src/correlation_kernels.cu',
-                'src/altcorr_kernel.cu',
-            ],
+            # sources=[
+            #     'src/droid.cpp', 
+            #     'src/droid_kernels.cu',
+            #     'src/correlation_kernels.cu',
+            #     'src/altcorr_kernel.cu',
+            # ],
+            sources=['dpvo/altcorr/correlation.cpp', 'dpvo/altcorr/correlation_kernel.cu'],
             extra_compile_args={
                 'cxx': ['-O3'],
                 'nvcc': ['-O3',
