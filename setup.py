@@ -60,22 +60,21 @@ setup(
                     '-gencode=arch=compute_86,code=sm_86',
                 ]
             }),
-
-        # CUDAExtension('cuda_ba',
-        #     sources=['dpvo/fastba/ba.cpp', 'dpvo/fastba/ba_cuda.cu'],
-        #     extra_compile_args={
-        #         'cxx':  ['-O3'], 
-        #         'nvcc': ['-O3'],
-        #     }),
-        # CUDAExtension('lietorch_backends', 
-        #     include_dirs=[
-        #         osp.join(ROOT, 'dpvo/lietorch/include'), 
-        #         osp.join(ROOT, 'thirdparty/eigen-3.4.0')],
-        #     sources=[
-        #         'dpvo/lietorch/src/lietorch.cpp', 
-        #         'dpvo/lietorch/src/lietorch_gpu.cu',
-        #         'dpvo/lietorch/src/lietorch_cpu.cpp'],
-        #     extra_compile_args={'cxx': ['-O3'], 'nvcc': ['-O3'],}),
+        CUDAExtension('cuda_ba',
+            sources=['dpvo/fastba/ba.cpp', 'dpvo/fastba/ba_cuda.cu'],
+            extra_compile_args={
+                'cxx':  ['-O3'], 
+                'nvcc': ['-O3'],
+            }),
+        CUDAExtension('lietorch_backends', 
+            include_dirs=[
+                osp.join(ROOT, 'dpvo/lietorch/include'), 
+                osp.join(ROOT, 'thirdparty/eigen-3.4.0')],
+            sources=[
+                'dpvo/lietorch/src/lietorch.cpp', 
+                'dpvo/lietorch/src/lietorch_gpu.cu',
+                'dpvo/lietorch/src/lietorch_cpu.cpp'],
+            extra_compile_args={'cxx': ['-O3'], 'nvcc': ['-O3'],}),
     ],
     cmdclass={
         'build_ext': BuildExtension
