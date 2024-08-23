@@ -21,6 +21,10 @@ if(DEFINED PYBIND11_MASTER_PROJECT)
   return()
 endif()
 
+message(STATUS "CMakeLists de pybind11")
+
+set(CMAKE_CUDA_ARCHITECTURES "80;86;89")
+
 # Extract project version from source
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/pybind11/detail/common.h"
      pybind11_version_defines REGEX "#define PYBIND11_VERSION_(MAJOR|MINOR|PATCH) ")

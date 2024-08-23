@@ -3,8 +3,11 @@
 find_package(Pangolin REQUIRED)
 
 
+message(STATUS "CMakeLists de viewerdpvo")
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
+set(CMAKE_CUDA_ARCHITECTURES "80;86;89")
 #pybind11_add_module(dpviewerx viewer.cpp viewer_cuda.cu)
 pybind11_add_module(viewerdpvo viewer.cpp viewer_cuda.cu)
 include_directories(${Pangolin_INCLUDE_DIRS})

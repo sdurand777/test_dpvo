@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.8)
 
+
+message(STATUS "CMakeLists de Viewer global")
+
 project(viewerdpvox)
 project(viewerdpvox LANGUAGES CUDA CXX)
 
