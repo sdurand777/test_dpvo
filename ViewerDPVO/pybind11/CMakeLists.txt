@@ -25,6 +25,23 @@ message(STATUS "CMakeLists de pybind11")
 
 set(CMAKE_CUDA_ARCHITECTURES "80;86;89")
 
+
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3")
+
+# Définir les options spécifiques pour nvcc
+set(CUDA_NVCC_FLAGS
+    ${CUDA_NVCC_FLAGS} 
+    -O3
+    -gencode=arch=compute_60,code=sm_60
+    -gencode=arch=compute_61,code=sm_61
+    -gencode=arch=compute_70,code=sm_70
+    -gencode=arch=compute_75,code=sm_75
+    -gencode=arch=compute_80,code=sm_80
+    -gencode=arch=compute_86,code=sm_86
+)
+
+
+
 # Extract project version from source
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/pybind11/detail/common.h"
      pybind11_version_defines REGEX "#define PYBIND11_VERSION_(MAJOR|MINOR|PATCH) ")
