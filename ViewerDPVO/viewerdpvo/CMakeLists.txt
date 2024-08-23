@@ -2,7 +2,6 @@
 # optional libraries
 find_package(Pangolin REQUIRED)
 
-
 message(STATUS "CMakeLists de viewerdpvo")
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
