@@ -23,6 +23,7 @@ set(CUDA_NVCC_FLAGS
 )
 
 
+set(CUDA_ARCH_BIN "75 80 86 89")
 
 #pybind11_add_module(dpviewerx viewer.cpp viewer_cuda.cu)
 pybind11_add_module(viewerdpvo viewer.cpp viewer_cuda.cu)

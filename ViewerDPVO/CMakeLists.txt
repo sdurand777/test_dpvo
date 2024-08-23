@@ -30,7 +30,7 @@ set(CUDA_NVCC_FLAGS
     -gencode=arch=compute_86,code=sm_86
 )
 
-
+set(CUDA_ARCH_BIN "75 80 86 89")
 
 # include(FindCUDA/select_compute_arch)
 # CUDA_DETECT_INSTALLED_GPUS(INSTALLED_GPU_CCS_1)

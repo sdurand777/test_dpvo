@@ -40,7 +40,7 @@ set(CUDA_NVCC_FLAGS
     -gencode=arch=compute_86,code=sm_86
 )
 
-
+set(CUDA_ARCH_BIN "75 80 86 89")
 
 # Extract project version from source
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/pybind11/detail/common.h"

@@ -54,16 +54,6 @@ class CMakeBuild(build_ext):
         ]
         build_args = ["--verbose"]
 
-        # Check if CUDA is available and add CUDA-related flags
-        if torch.cuda.is_available():
-            cmake_args += ["-DWITH_CUDA=ON"]
-            cuda_arch_list = os.environ.get("TORCH_CUDA_ARCH_LIST", "7.5 8.0 8.6")
-            if cuda_arch_list:
-                cmake_args += ["-DCMAKE_CUDA_ARCHITECTURES={75;80;86}".format(cuda_arch_list)]
-        else:
-            cmake_args += ["-DWITH_CUDA=OFF"]
-
-
 
         # Adding CMake arguments set as environment variable
         # (needed e.g. to build for ARM OSx on conda-forge)
