@@ -1,4 +1,4 @@
-name: slam_exp
+name: dpvo_exp
 channels:
   - pyg
   - pytorch
