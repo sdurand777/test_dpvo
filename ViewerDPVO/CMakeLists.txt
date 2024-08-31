@@ -16,7 +16,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3")
 
 #set(CMAKE_CUDA_ARCHITECTURES 89)
-set(CMAKE_CUDA_ARCHITECTURES "80;86;89")
+set(CMAKE_CUDA_ARCHITECTURES "60;61")
 
 # Définir les options spécifiques pour nvcc
 set(CUDA_NVCC_FLAGS
@@ -24,13 +24,13 @@ set(CUDA_NVCC_FLAGS
     -O3
     -gencode=arch=compute_60,code=sm_60
     -gencode=arch=compute_61,code=sm_61
-    -gencode=arch=compute_70,code=sm_70
-    -gencode=arch=compute_75,code=sm_75
-    -gencode=arch=compute_80,code=sm_80
-    -gencode=arch=compute_86,code=sm_86
+    # -gencode=arch=compute_70,code=sm_70
+    # -gencode=arch=compute_75,code=sm_75
+    # -gencode=arch=compute_80,code=sm_80
+    # -gencode=arch=compute_86,code=sm_86
 )
 
-set(CUDA_ARCH_BIN "75 80 86 89")
+set(CUDA_ARCH_BIN "60 61")
 
 # include(FindCUDA/select_compute_arch)
 # CUDA_DETECT_INSTALLED_GPUS(INSTALLED_GPU_CCS_1)
