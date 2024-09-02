@@ -132,6 +132,7 @@ class Patchifier(nn.Module):
             disps = torch.ones(b, n, h, w, device="cuda")
 
         grid, _ = coords_grid_with_index(disps, device=fmap.device)
+
         patches = altcorr.patchify(grid[0], coords, P//2).view(b, -1, 3, P, P)
 
         index = torch.arange(n, device="cuda").view(n, 1)
