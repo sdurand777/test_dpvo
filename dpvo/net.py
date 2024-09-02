@@ -116,24 +116,13 @@ class Patchifier(nn.Module):
         P = self.patch_size
 
         # bias patch selection towards regions with high gradient
-        if gradient_bias:
-            g = self.__image_gradient(images)
-            x = torch.randint(1, w-1, size=[n, 3*patches_per_image], device="cuda")
-            y = torch.randint(1, h-1, size=[n, 3*patches_per_image], device="cuda")
+        x = torch.randint(1, w-1, size=[n, patches_per_image], device="cuda")
+        y = torch.randint(1, h-1, size=[n, patches_per_image], device="cuda")
 
-            coords = torch.stack([x, y], dim=-1).float()
-            g = altcorr.patchify(g[0,:,None], coords, 0).view(n, 3 * patches_per_image)
-            
-            ix = torch.argsort(g, dim=1)
-            x = torch.gather(x, 1, ix[:, -patches_per_image:])
-            y = torch.gather(y, 1, ix[:, -patches_per_image:])
-
-        else:
-            x = torch.randint(1, w-1, size=[n, patches_per_image], device="cuda")
-            y = torch.randint(1, h-1, size=[n, patches_per_image], device="cuda")
-        
         coords = torch.stack([x, y], dim=-1).float()
+            
         imap = altcorr.patchify(imap[0], coords, 0).view(b, -1, DIM, 1, 1)
+
         gmap = altcorr.patchify(fmap[0], coords, P//2).view(b, -1, 128, P, P)
 
         if return_color:

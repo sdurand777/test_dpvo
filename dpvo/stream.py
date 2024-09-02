@@ -4,46 +4,107 @@ import numpy as np
 from multiprocessing import Process, Queue
 from pathlib import Path
 from itertools import chain
+import time
 
 import torch
 from torch.nn import functional as F
 
 import matplotlib.pyplot as plt
 
-
 def image_stream(queue, imagedir, calib, stride, skip=0):
-    """ image generator """
+    """ Image generator """
 
+    # Charger les paramètres de calibration
     calib = np.loadtxt(calib, delimiter=" ")
     fx, fy, cx, cy = calib[:4]
 
     K = np.eye(3)
-    K[0,0] = fx
-    K[0,2] = cx
-    K[1,1] = fy
-    K[1,2] = cy
+    K[0, 0] = fx
+    K[0, 2] = cx
+    K[1, 1] = fy
+    K[1, 2] = cy
 
     img_exts = ["*.png", "*.jpeg", "*.jpg"]
     image_list = sorted(chain.from_iterable(Path(imagedir).glob(e) for e in img_exts))[skip::stride]
 
     for t, imfile in enumerate(image_list):
-        image = cv2.imread(str(imfile))
-        if len(calib) > 4:
-            image = cv2.undistort(image, K, calib[4:])
+        try:
+            image = cv2.imread(str(imfile))
+            if image is None:
+                print(f"Erreur lors de la lecture de l'image {imfile}.")
+                continue
 
-        if 0:
-            image = cv2.resize(image, None, fx=0.5, fy=0.5)
-            intrinsics = np.array([fx / 2, fy / 2, cx / 2, cy / 2])
+            if len(calib) > 4:
+                image = cv2.undistort(image, K, calib[4:])
 
+            # Optionnel : Redimensionnement de l'image pour le traitement
+            if 0:  # Mettre 0 à 1 si vous voulez activer le redimensionnement
+                image = cv2.resize(image, None, fx=0.5, fy=0.5)
+                intrinsics = np.array([fx / 2, fy / 2, cx / 2, cy / 2])
+            else:
+                intrinsics = np.array([fx, fy, cx, cy])
+
+            h, w, _ = image.shape
+            image = image[:h - h % 16, :w - w % 16]
+
+            # Vérifier si la queue est pleine avant de mettre des éléments
+            if not queue.full():
+                queue.put((t, image, intrinsics))
+            else:
+                print("La queue est pleine, attente pour la mise en file.")
+                while queue.full():
+                    pass  # Attendre que la queue ne soit plus pleine
+
+        except Exception as e:
+            print(f"Erreur lors du traitement de l'image {imfile}: {e}")
+
+    # Envoyer le signal de fin de traitement
+    try:
+        if not queue.full():
+            queue.put((-1, image, intrinsics))
         else:
-            intrinsics = np.array([fx, fy, cx, cy])
-            
-        h, w, _ = image.shape
-        image = image[:h-h%16, :w-w%16]
+            print("La queue est pleine, attente pour l'envoi du signal de fin.")
+            while queue.full():
+                pass  # Attendre que la queue ne soit plus pleine
+            queue.put((-1, image, intrinsics))
+    except Exception as e:
+        print(f"Erreur lors de l'envoi du signal de fin: {e}")
 
-        queue.put((t, image, intrinsics))
+    print("Processus image_stream terminé.")
 
-    queue.put((-1, image, intrinsics))
+# def image_stream(queue, imagedir, calib, stride, skip=0):
+#     """ image generator """
+#
+#     calib = np.loadtxt(calib, delimiter=" ")
+#     fx, fy, cx, cy = calib[:4]
+#
+#     K = np.eye(3)
+#     K[0,0] = fx
+#     K[0,2] = cx
+#     K[1,1] = fy
+#     K[1,2] = cy
+#
+#     img_exts = ["*.png", "*.jpeg", "*.jpg"]
+#     image_list = sorted(chain.from_iterable(Path(imagedir).glob(e) for e in img_exts))[skip::stride]
+#
+#     for t, imfile in enumerate(image_list):
+#         image = cv2.imread(str(imfile))
+#         if len(calib) > 4:
+#             image = cv2.undistort(image, K, calib[4:])
+#
+#         if 0:
+#             image = cv2.resize(image, None, fx=0.5, fy=0.5)
+#             intrinsics = np.array([fx / 2, fy / 2, cx / 2, cy / 2])
+#
+#         else:
+#             intrinsics = np.array([fx, fy, cx, cy])
+#             
+#         h, w, _ = image.shape
+#         image = image[:h-h%16, :w-w%16]
+#
+#         queue.put((t, image, intrinsics))
+#
+#     queue.put((-1, image, intrinsics))
 
 
 
@@ -132,53 +193,78 @@ def image_ivm_stream(queue, imagedir, stride, skip=0):
 
 
 
-
-
-
-
-
 def video_stream(queue, imagedir, calib, stride, skip=0):
-    """ video generator """
+    """ Video generator """
 
     calib = np.loadtxt(calib, delimiter=" ")
     fx, fy, cx, cy = calib[:4]
 
     K = np.eye(3)
-    K[0,0] = fx
-    K[0,2] = cx
-    K[1,1] = fy
-    K[1,2] = cy
+    K[0, 0] = fx
+    K[0, 2] = cx
+    K[1, 1] = fy
+    K[1, 2] = cy
 
     cap = cv2.VideoCapture(imagedir)
 
+    if not cap.isOpened():
+        print(f"Erreur : impossible d'ouvrir le fichier vidéo {imagedir}.")
+        queue.put((-1, None, None))
+        return
+
     t = 0
 
+    # Lire les frames à ignorer
     for _ in range(skip):
-        ret, image = cap.read()
+        cap.read()
 
-    while True:
-        # Capture frame-by-frame
-        for _ in range(stride):
-            ret, image = cap.read()
-            # if frame is read correctly ret is True
-            if not ret:
+    try:
+        while True:
+            # Vérifier si la queue est pleine avant de traiter la prochaine frame
+            while queue.full():
+                print("Queue pleine, attente pour la mise en file.")
+                time.sleep(0.1)  # Attendre un court instant avant de réessayer
+
+            for _ in range(stride):
+                ret, image = cap.read()
+                if not ret:
+                    print("Fin de la vidéo ou erreur de lecture.")
+                    queue.put((-1, None, None))
+                    return
+
+            if image is None:
+                print("Image lue est None, fin du processus.")
                 break
 
-        if not ret:
-            break
+            if len(calib) > 4:
+                image = cv2.undistort(image, K, calib[4:])
 
-        if len(calib) > 4:
-            image = cv2.undistort(image, K, calib[4:])
+            image = cv2.resize(image, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+            h, w, _ = image.shape
+            image = image[:h - h % 16, :w - w % 16]
 
-        image = cv2.resize(image, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
-        h, w, _ = image.shape
-        image = image[:h-h%16, :w-w%16]
+            intrinsics = np.array([fx * 0.5, fy * 0.5, cx * 0.5, cy * 0.5])
 
-        intrinsics = np.array([fx*.5, fy*.5, cx*.5, cy*.5])
-        queue.put((t, image, intrinsics))
+            # Ajouter la frame à la queue
+            queue.put((t, image, intrinsics))
+            print(f"Frame {t} ajoutée à la queue.")
+            t += 1
 
-        t += 1
+    except Exception as e:
+        print(f"Erreur lors de la lecture ou du traitement de la vidéo: {e}")
 
-    queue.put((-1, image, intrinsics))
-    cap.release()
+    finally:
+        # Envoyer le signal de fin si la queue n'est pas pleine
+        if not queue.full():
+            queue.put((-1, None, None))
+        else:
+            print("Queue pleine, attente pour l'envoi du signal de fin.")
+            while queue.full():
+                time.sleep(0.1)  # Attendre un court instant avant de réessayer
+            queue.put((-1, None, None))
+        
+        cap.release()
+        print("Processus video_stream terminé.")
+
+
 

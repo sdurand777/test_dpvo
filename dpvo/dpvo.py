@@ -175,6 +175,38 @@ class DPVO:
 
         return poses, tstamps
 
+
+    def terminate_dev(self):
+        # if self.viewer is not None:
+        #     self.viewer.join()
+        # Nettoyer les tensors sur le GPU pour libérer la mémoire
+        try:
+            torch.cuda.empty_cache()
+            del self.image_
+            del self.tstamps_
+            del self.poses_
+            del self.patches_
+            del self.intrinsics_
+            del self.points_
+            del self.colors_
+            del self.index_
+            del self.index_map_
+            del self.imap_
+            del self.gmap_
+            del self.fmap1_
+            del self.fmap2_
+            del self.net
+            del self.ii
+            del self.jj
+            del self.kk
+        except Exception as e:
+            print(f"Erreur lors du nettoyage des tensors GPU : {e}")
+
+        print("slam terminate dev")
+
+        return 0
+
+
     def corr(self, coords, indicies=None):
         """ local correlation volume """
         ii, jj = indicies if indicies is not None else (self.kk, self.jj)
