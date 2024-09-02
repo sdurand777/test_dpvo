@@ -20,11 +20,11 @@ from multiprocessing import Process, Queue
 from queue import Empty  # Import correct d'Empty
 from plyfile import PlyElement, PlyData
 
-from dpvo.utils import Timer
-from dpvo.dpvo import DPVO
-from dpvo.config import cfg
-from dpvo.stream import image_stream, video_stream
-from dpvo.plot_utils import plot_trajectory, save_trajectory_tum_format
+from utils import Timer
+from dpvo import DPVO
+from config import cfg
+from stream import image_stream, video_stream
+from plot_utils import plot_trajectory, save_trajectory_tum_format
 
 SKIP = 0
 

@@ -7,17 +7,34 @@ from collections import OrderedDict
 import torch_scatter
 from torch_scatter import scatter_sum
 
-from . import fastba
-from . import altcorr
-from . import lietorch
-from .lietorch import SE3
+# from . import fastba
+# from . import altcorr
+# from . import lietorch
+# from .lietorch import SE3
+#
+# from .extractor import BasicEncoder, BasicEncoder4
+# from .blocks import GradientClip, GatedResidual, SoftAgg
+#
+# from .utils import *
+# from .ba import BA
+# from . import projective_ops as pops
 
-from .extractor import BasicEncoder, BasicEncoder4
-from .blocks import GradientClip, GatedResidual, SoftAgg
 
-from .utils import *
-from .ba import BA
-from . import projective_ops as pops
+
+import fastba
+import altcorr
+import lietorch
+from lietorch import SE3
+
+from extractor import BasicEncoder, BasicEncoder4
+from blocks import GradientClip, GatedResidual, SoftAgg
+
+from utils import *
+from ba import BA
+import projective_ops as pops
+
+
+
 
 autocast = torch.cuda.amp.autocast
 import matplotlib.pyplot as plt
