@@ -4,3 +4,9 @@ build/
 *.pyc
 movies/
 *.zip
+# Ignorer tous les fichiers .pyc dans tous les répertoires __pycache__
+**/__pycache__/
+**/*.pyc
+
+# Ignorer le fichier TartanAir.pickle
+TartanAir.pickle
