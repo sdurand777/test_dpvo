@@ -63,6 +63,9 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
             if t == STOP_SIGNAL or t == 20:
                 break
 
+            """ stop dans la loop """
+            import pdb; pdb.set_trace()
+
             image = torch.from_numpy(image).permute(2, 0, 1).cuda()
             intrinsics = torch.from_numpy(intrinsics).cuda()
 
@@ -196,6 +199,7 @@ if __name__ == '__main__':
                                                       'ModuleSpec.*'])
 
         graphviz = GraphvizOutput()
+        #graphviz.output_file = 'tmp.pdf'
         graphviz.output_file = 'callgraph.pdf'
         graphviz.output_type = 'pdf'  # Spécifier le format de sortie en PDF
 

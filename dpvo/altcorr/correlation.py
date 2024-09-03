@@ -49,9 +49,10 @@ class PatchLayer(torch.autograd.Function):
         return grad, None, None
 
 def patchify(net, coords, radius, mode='bilinear'):
+    
     """ extract patches """
-
     patches = PatchLayer.apply(net, coords, radius)
+    import pdb; pdb.set_trace()
 
     if mode == 'bilinear':
         offset = (coords - coords.floor()).to(net.device)
@@ -62,6 +63,9 @@ def patchify(net, coords, radius, mode='bilinear'):
         x01 = (1-dy) * (  dx) * patches[...,:d,1:]
         x10 = (  dy) * (1-dx) * patches[...,1:,:d]
         x11 = (  dy) * (  dx) * patches[...,1:,1:]
+
+        " return mode bilinear "
+        import pdb; pdb.set_trace()
 
         return x00 + x01 + x10 + x11
 

@@ -222,7 +222,7 @@ def video_stream(queue, imagedir, calib, stride, skip=0):
         while True:
             # Vérifier si la queue est pleine avant de traiter la prochaine frame
             while queue.full():
-                print("Queue pleine, attente pour la mise en file.")
+                #print("Queue pleine, attente pour la mise en file.")
                 time.sleep(0.1)  # Attendre un court instant avant de réessayer
 
             for _ in range(stride):
@@ -241,13 +241,16 @@ def video_stream(queue, imagedir, calib, stride, skip=0):
 
             image = cv2.resize(image, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
             h, w, _ = image.shape
+            
+            #print("image shape : ", image.shape)
+
             image = image[:h - h % 16, :w - w % 16]
 
             intrinsics = np.array([fx * 0.5, fy * 0.5, cx * 0.5, cy * 0.5])
 
             # Ajouter la frame à la queue
             queue.put((t, image, intrinsics))
-            print(f"Frame {t} ajoutée à la queue.")
+            #print(f"Frame {t} ajoutée à la queue.")
             t += 1
 
     except Exception as e:

@@ -35,6 +35,9 @@ def coords_grid(b, n, h, w, **kwargs):
     coords = torch.stack(torch.meshgrid(y, x, indexing="ij"))
     return coords[[1,0]].view(1, 1, 2, h, w).repeat(b, n, 1, 1, 1)
 
+
+
+
 def coords_grid_with_index(d, **kwargs):
     """ coordinate grid with frame index"""
     b, n, h, w = d.shape
@@ -51,6 +54,9 @@ def coords_grid_with_index(d, **kwargs):
     index = index.view(1, n, 1, 1, 1).repeat(b, 1, 1, h, w)
 
     return coords, index
+
+
+
 
 def patchify(x, patch_size=3):
     """ extract patches from video """

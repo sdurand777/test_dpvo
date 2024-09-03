@@ -7,31 +7,31 @@ from collections import OrderedDict
 import torch_scatter
 from torch_scatter import scatter_sum
 
-# from . import fastba
-# from . import altcorr
-# from . import lietorch
-# from .lietorch import SE3
+from . import fastba
+from . import altcorr
+from . import lietorch
+from .lietorch import SE3
+
+from .extractor import BasicEncoder, BasicEncoder4
+from .blocks import GradientClip, GatedResidual, SoftAgg
+
+from .utils import *
+from .ba import BA
+from . import projective_ops as pops
+
+from PIL import Image
+
+# import fastba
+# import altcorr
+# import lietorch
+# from lietorch import SE3
 #
-# from .extractor import BasicEncoder, BasicEncoder4
-# from .blocks import GradientClip, GatedResidual, SoftAgg
+# from extractor import BasicEncoder, BasicEncoder4
+# from blocks import GradientClip, GatedResidual, SoftAgg
 #
-# from .utils import *
-# from .ba import BA
-# from . import projective_ops as pops
-
-
-
-import fastba
-import altcorr
-import lietorch
-from lietorch import SE3
-
-from extractor import BasicEncoder, BasicEncoder4
-from blocks import GradientClip, GatedResidual, SoftAgg
-
-from utils import *
-from ba import BA
-import projective_ops as pops
+# from utils import *
+# from ba import BA
+# import projective_ops as pops
 
 
 
@@ -88,7 +88,8 @@ class Update(nn.Module):
             nn.Sigmoid())
 
 
-    def forward(self, net, inp, corr, flow, ii, jj, kk):
+    #def forward(self, net, inp, corr, flow, ii, jj, kk):
+    def __call__(self, net, inp, corr, flow, ii, jj, kk):
         """ update operator """
 
         net = net + inp + self.corr(corr)
@@ -109,6 +110,12 @@ class Update(nn.Module):
         return net, (self.d(net), self.w(net), None)
 
 
+
+
+
+
+
+
 class Patchifier(nn.Module):
     def __init__(self, patch_size=3):
         super(Patchifier, self).__init__()
@@ -124,10 +131,54 @@ class Patchifier(nn.Module):
         g = F.avg_pool2d(g, 4, 4)
         return g
 
-    def forward(self, images, patches_per_image=80, disps=None, gradient_bias=False, return_color=False):
+    def normalize_and_convert_to_pil(activation_map):
+        # Normaliser les valeurs pour qu'elles soient dans la gamme [0, 255]
+        min_val = activation_map.min()
+        max_val = activation_map.max()
+        normalized_map = (activation_map - min_val) / (max_val - min_val) 
+
+        # Convertir en une gamme [0, 255] et changer le type à uint8
+        normalized_map = (normalized_map * 255).byte()
+        
+        # Convertir le tenseur PyTorch en numpy array
+        numpy_map = normalized_map.numpy()
+
+        # Convertir numpy array en image PIL
+        image = Image.fromarray(numpy_map, mode='L')
+        return image
+
+    def create_subplot(images, grid_size):
+        # Créer une image composite
+        widths, heights = zip(*(i.size for i in images))
+        total_width = max(widths) * grid_size[1]
+        total_height = max(heights) * grid_size[0]
+
+        new_image = Image.new('L', (total_width, total_height))
+
+        x_offset = 0
+        y_offset = 0
+        for i, img in enumerate(images):
+            new_image.paste(img, (x_offset, y_offset))
+            x_offset += img.width
+            if (i + 1) % grid_size[1] == 0:
+                x_offset = 0
+                y_offset += img.height
+
+        return new_image
+
+    #def forward(self, images, patches_per_image=80, disps=None, gradient_bias=False, return_color=False):
+    def __call__(self, images, patches_per_image=80, disps=None, gradient_bias=False, return_color=False):
+
         """ extract patches from input images """
-        fmap = self.fnet(images) / 4.0
-        imap = self.inet(images) / 4.0
+        import pdb; pdb.set_trace()
+
+        # extraction des features
+        fmap = self.fnet(images) / 4.0 # [1, 1; 128, 132, 240]
+
+        imap = self.inet(images) / 4.0 # {1, 1, 385; 132, 240}
+
+        """ extract patches from input images """
+        import pdb; pdb.set_trace()
 
         b, n, c, h, w = fmap.shape
         P = self.patch_size
@@ -138,22 +189,29 @@ class Patchifier(nn.Module):
 
         coords = torch.stack([x, y], dim=-1).float()
             
-        imap = altcorr.patchify(imap[0], coords, 0).view(b, -1, DIM, 1, 1)
-
         gmap = altcorr.patchify(fmap[0], coords, P//2).view(b, -1, 128, P, P)
 
+        imap = altcorr.patchify(imap[0], coords, 0).view(b, -1, DIM, 1, 1)
+
+        import pdb; pdb.set_trace()
+
         if return_color:
+            # on multiplie par 4 pour recuperer les valeurs de couleur direct sur l'image pleine taille
             clr = altcorr.patchify(images[0], 4*(coords + 0.5), 0).view(b, -1, 3)
 
         if disps is None:
             disps = torch.ones(b, n, h, w, device="cuda")
 
+        # grid 3, 132, 240 pour recuperer les indices pour els patches
         grid, _ = coords_grid_with_index(disps, device=fmap.device)
 
         patches = altcorr.patchify(grid[0], coords, P//2).view(b, -1, 3, P, P)
 
         index = torch.arange(n, device="cuda").view(n, 1)
         index = index.repeat(1, patches_per_image).reshape(-1)
+
+        """ end of Patchifier.forward """
+        import pdb; pdb.set_trace()
 
         if return_color:
             return fmap, gmap, imap, patches, index, clr
@@ -190,7 +248,9 @@ class VONet(nn.Module):
 
     @autocast(enabled=False)
     def forward(self, images, poses, disps, intrinsics, M=1024, STEPS=12, P=1, structure_only=False, rescale=False):
+
         """ Estimates SE3 or Sim3 between pair of frames """
+        #import pdb; pdb.set_trace()
 
         images = 2 * (images / 255.0) - 0.5
         intrinsics = intrinsics / 4.0

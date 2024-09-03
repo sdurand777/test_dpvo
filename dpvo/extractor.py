@@ -252,6 +252,8 @@ class BasicEncoder4(nn.Module):
         x = x.view(b*n, c1, h1, w1)
 
         x = self.conv1(x)
+
+        # fonction activation
         x = self.norm1(x)
         x = self.relu1(x)
 

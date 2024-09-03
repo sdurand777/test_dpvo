@@ -2,29 +2,53 @@ import torch
 import numpy as np
 import torch.nn.functional as F
 
-# from . import fastba
-# from . import altcorr
-# from . import lietorch
-# from .lietorch import SE3
+from . import fastba
+from . import altcorr
+from . import lietorch
+from .lietorch import SE3
+
+from .net import VONet
+from .utils import *
+from . import projective_ops as pops
+
+# import fastba
+# import altcorr
+# import lietorch
+# from lietorch import SE3
 #
-# from .net import VONet
-# from .utils import *
-# from . import projective_ops as pops
-
-import fastba
-import altcorr
-import lietorch
-from lietorch import SE3
-
-from net import VONet
-from utils import *
-import projective_ops as pops
+# from net import VONet
+# from utils import *
+# import projective_ops as pops
 
 
 
 
 autocast = torch.cuda.amp.autocast
 Id = SE3.Identity(1, device="cuda")
+
+
+
+# class Patchifier_Wrapper:
+#     def __init__(self, method):
+#         self.method = method
+#
+#     def __call__(self, *args, **kwargs):
+#         #print(f"Calling {self.method.__name__} with args: {args}, kwargs: {kwargs}")
+#         result = self.method(*args, **kwargs)
+#         #print(f"Result of {self.method.__name__}: {result}")
+#         return result
+
+# class Update_Wrapper:
+#     def __init__(self, method):
+#         self.method = method
+#
+#     def __call__(self, *args, **kwargs):
+#         #print(f"Calling {self.method.__name__} with args: {args}, kwargs: {kwargs}")
+#         result = self.method(*args, **kwargs)
+#         #print(f"Result of {self.method.__name__}: {result}")
+#         return result
+
+
 
 
 class DPVO:
@@ -107,9 +131,19 @@ class DPVO:
             for k, v in state_dict.items():
                 if "update.lmbda" not in k:
                     new_state_dict[k.replace('module.', '')] = v
-            
+
             self.network = VONet()
             self.network.load_state_dict(new_state_dict)
+            
+            # Vérifier les clés du state_dict
+            print("Clés du state_dict chargées :")
+            for k in new_state_dict.keys():
+                print(k)
+
+            import pdb; pdb.set_trace()
+
+            #self.network.patchify.forward = Patchifier_Wrapper(self.network.patchify.forward)
+            #self.network.update.forward = Update_Wrapper(self.network.update.forward)
 
         else:
             self.network = network
@@ -362,10 +396,10 @@ class DPVO:
             torch.arange(max(self.n-r, 0), self.n, device="cuda"), indexing='ij')
 
     def __call__(self, tstamp, image, intrinsics):
+
         """ track new frame """
-
-        print("TRACK NEW FRAME")
-
+        #import pdb; pdb.set_trace()
+    
         if (self.n+1) >= self.N:
             raise Exception(f'The buffer size is too small. You can increase it using "--buffer {self.N*2}"')
 
@@ -379,12 +413,18 @@ class DPVO:
 
         image = 2 * (image[None,None] / 255.0) - 0.5
         
+        # recuperer disp pour patchify
+
         with autocast(enabled=self.cfg.MIXED_PRECISION):
             fmap, gmap, imap, patches, _, clr = \
                 self.network.patchify(image,
                     patches_per_image=self.cfg.PATCHES_PER_FRAME, 
                     gradient_bias=self.cfg.GRADIENT_BIAS, 
                     return_color=True)
+
+        """ patchifier done """
+        #import pdb; pdb.set_trace()
+
 
         ### update state attributes ###
         self.tlist.append(tstamp)
@@ -410,6 +450,8 @@ class DPVO:
                 tvec_qvec = self.poses[self.n-1]
                 self.poses_[self.n] = tvec_qvec
 
+
+        # So after initialization no more depth info used from patches
         # TODO better depth initialization
         patches[:,:,2] = torch.rand_like(patches[:,:,2,0,0,None,None])
         if self.is_initialized:
