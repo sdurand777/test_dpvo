@@ -27,6 +27,8 @@ from dpvo.stream import image_stream, video_stream
 from dpvo.plot_utils import plot_trajectory, save_trajectory_tum_format
 
 SKIP = 0
+DEBUG = False
+
 
 def show_image(image, t=0):
     image = image.permute(1, 2, 0).cpu().numpy()
@@ -60,11 +62,11 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
                 print("Aucun message dans la queue, arrêt du processus.")
                 break
 
-            if t == STOP_SIGNAL or t == 20:
-                break
+            # if t == STOP_SIGNAL or t == 20:
+            #     break
 
             """ stop dans la loop """
-            import pdb; pdb.set_trace()
+            if DEBUG: import pdb; pdb.set_trace()
 
             image = torch.from_numpy(image).permute(2, 0, 1).cuda()
             intrinsics = torch.from_numpy(intrinsics).cuda()

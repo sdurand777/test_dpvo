@@ -11,6 +11,8 @@ from .net import VONet
 from .utils import *
 from . import projective_ops as pops
 
+DEBUG = False
+
 # import fastba
 # import altcorr
 # import lietorch
@@ -140,7 +142,7 @@ class DPVO:
             for k in new_state_dict.keys():
                 print(k)
 
-            import pdb; pdb.set_trace()
+            if DEBUG: import pdb; pdb.set_trace()
 
             #self.network.patchify.forward = Patchifier_Wrapper(self.network.patchify.forward)
             #self.network.update.forward = Update_Wrapper(self.network.update.forward)

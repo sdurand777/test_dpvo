@@ -217,7 +217,7 @@ void Viewer::drawPoints()
     glEnable(GL_PROGRAM_POINT_SIZE);  // This line is optional, depending on your OpenGL version and needs
 
     // Set point size
-    float pointSize = 10.0f;  // Set your desired point size here
+    float pointSize = 1.0f;  // Set your desired point size here
     glPointSize(pointSize);
 
     // bind vertex buffer

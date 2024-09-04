@@ -1,0 +1,7 @@
+setup.py
+viewerdpvo.egg-info/PKG-INFO
+viewerdpvo.egg-info/SOURCES.txt
+viewerdpvo.egg-info/dependency_links.txt
+viewerdpvo.egg-info/not-zip-safe
+viewerdpvo.egg-info/requires.txt
+viewerdpvo.egg-info/top_level.txt

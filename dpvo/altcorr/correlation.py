@@ -1,5 +1,7 @@
 import torch
 import cuda_corr
+DEBUG = False
+
 
 class CorrLayer(torch.autograd.Function):
     @staticmethod
@@ -52,7 +54,7 @@ def patchify(net, coords, radius, mode='bilinear'):
     
     """ extract patches """
     patches = PatchLayer.apply(net, coords, radius)
-    import pdb; pdb.set_trace()
+    if DEBUG: import pdb; pdb.set_trace()
 
     if mode == 'bilinear':
         offset = (coords - coords.floor()).to(net.device)
@@ -65,7 +67,7 @@ def patchify(net, coords, radius, mode='bilinear'):
         x11 = (  dy) * (  dx) * patches[...,1:,1:]
 
         " return mode bilinear "
-        import pdb; pdb.set_trace()
+        if DEBUG: import pdb; pdb.set_trace()
 
         return x00 + x01 + x10 + x11
 

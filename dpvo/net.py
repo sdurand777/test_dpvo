@@ -21,6 +21,8 @@ from . import projective_ops as pops
 
 from PIL import Image
 
+DEBUG = False
+
 # import fastba
 # import altcorr
 # import lietorch
@@ -170,7 +172,7 @@ class Patchifier(nn.Module):
     def __call__(self, images, patches_per_image=80, disps=None, gradient_bias=False, return_color=False):
 
         """ extract patches from input images """
-        import pdb; pdb.set_trace()
+        if DEBUG: import pdb; pdb.set_trace()
 
         # extraction des features
         fmap = self.fnet(images) / 4.0 # [1, 1; 128, 132, 240]
@@ -178,7 +180,7 @@ class Patchifier(nn.Module):
         imap = self.inet(images) / 4.0 # {1, 1, 385; 132, 240}
 
         """ extract patches from input images """
-        import pdb; pdb.set_trace()
+        if DEBUG: import pdb; pdb.set_trace()
 
         b, n, c, h, w = fmap.shape
         P = self.patch_size
@@ -193,7 +195,7 @@ class Patchifier(nn.Module):
 
         imap = altcorr.patchify(imap[0], coords, 0).view(b, -1, DIM, 1, 1)
 
-        import pdb; pdb.set_trace()
+        if DEBUG: import pdb; pdb.set_trace()
 
         if return_color:
             # on multiplie par 4 pour recuperer les valeurs de couleur direct sur l'image pleine taille
@@ -211,7 +213,7 @@ class Patchifier(nn.Module):
         index = index.repeat(1, patches_per_image).reshape(-1)
 
         """ end of Patchifier.forward """
-        import pdb; pdb.set_trace()
+        if DEBUG: import pdb; pdb.set_trace()
 
         if return_color:
             return fmap, gmap, imap, patches, index, clr
