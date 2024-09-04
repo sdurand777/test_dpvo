@@ -30,12 +30,12 @@ unset(CMAKE_CUDA_ARCHITECTURES CACHE)
 unset(CUDA_NVCC_FLAGS CACHE)
 
 # Set desired CUDA architectures
-set(CMAKE_CUDA_ARCHITECTURES "60;61")
+set(CMAKE_CUDA_ARCHITECTURES "86")
 
 # Define CUDA NVCC flags correctly
 set(CUDA_NVCC_FLAGS "")
 list(APPEND CUDA_NVCC_FLAGS "-O3")
-list(APPEND CUDA_NVCC_FLAGS "--generate-code=arch=compute_61,code=[compute_61,sm_61]")
+list(APPEND CUDA_NVCC_FLAGS "--generate-code=arch=compute_86,code=[compute_86,sm_86]")
 
 string(REPLACE ";" " " CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}")
 
