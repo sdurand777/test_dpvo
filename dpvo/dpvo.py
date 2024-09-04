@@ -397,7 +397,7 @@ class DPVO:
         return flatmeshgrid(torch.arange(t0, t1, device="cuda"),
             torch.arange(max(self.n-r, 0), self.n, device="cuda"), indexing='ij')
 
-    def __call__(self, tstamp, image, intrinsics):
+    def __call__(self, tstamp, image, disp=None, intrinsics=None):
 
         """ track new frame """
         #import pdb; pdb.set_trace()
@@ -419,10 +419,11 @@ class DPVO:
 
         with autocast(enabled=self.cfg.MIXED_PRECISION):
             fmap, gmap, imap, patches, _, clr = \
-                self.network.patchify(image,
-                    patches_per_image=self.cfg.PATCHES_PER_FRAME, 
-                    gradient_bias=self.cfg.GRADIENT_BIAS, 
-                    return_color=True)
+                self.network.patchify(  image,
+                                        disp,
+                                        patches_per_image=self.cfg.PATCHES_PER_FRAME, 
+                                        gradient_bias=self.cfg.GRADIENT_BIAS, 
+                                        return_color=True)
 
         """ patchifier done """
         #import pdb; pdb.set_trace()
@@ -454,11 +455,12 @@ class DPVO:
 
 
         # So after initialization no more depth info used from patches
+
         # TODO better depth initialization
-        patches[:,:,2] = torch.rand_like(patches[:,:,2,0,0,None,None])
-        if self.is_initialized:
-            s = torch.median(self.patches_[self.n-3:self.n,:,2])
-            patches[:,:,2] = s
+        # patches[:,:,2] = torch.rand_like(patches[:,:,2,0,0,None,None])
+        # if self.is_initialized:
+        #     s = torch.median(self.patches_[self.n-3:self.n,:,2])
+        #     patches[:,:,2] = s
 
         self.patches_[self.n] = patches
 

@@ -7,7 +7,9 @@ import torch
 from pathlib import Path
 from multiprocessing import Process, Queue
 
-#from plyfile import PlyElement, PlyData
+from plyfile import PlyElement, PlyData
+
+import open3d as o3d
 
 from dpvo.utils import Timer
 from dpvo.dpvo import DPVO
@@ -16,6 +18,8 @@ from dpvo.stream import image_stream, video_stream, image_ivm_300_stream
 from dpvo.plot_utils import plot_trajectory, save_trajectory_tum_format
 
 import time
+
+DEBUG = True
 
 # import torch
 # import numpy as np
@@ -62,13 +66,14 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
     # if viewer is None:
     #     viewer = ViewerX()
 
-    number_of_images = len([file for file in os.listdir(imagedir) if file.endswith('.JPG')])
+    imagedir_img = imagedir+"/left/"
+    number_of_images = len([file for file in os.listdir(imagedir_img) if file.endswith('.JPG')])
         
     print("number_of_images : ", number_of_images)
 
     while 1:
         #try:
-        (t, image, intrinsics) = queue.get(timeout=10)
+        (t, image, disp_sens, intrinsics) = queue.get(timeout=10)
         # except queue.empty:
         #     print("Empty queue")
         # except FileNotFoundError as e:
@@ -77,9 +82,11 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
         if t < 0: 
             break
 
+        # if t >= 100:
+        #     break
 
-        # if t >= number_of_images-10:
-        #    break
+        if t >= number_of_images-10:
+           break
         #while 1: 
             #     print("wait ...")
             #     time.sleep(1)
@@ -107,15 +114,71 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
         intrinsics = intrinsics.cuda()
 
         #with Timer("SLAM", enabled=timeit):
-        slam(t, image, intrinsics)
+        slam(t, image, disp_sens, intrinsics)
+
+    points = slam.points_.cpu().numpy()[:slam.m]
+    colors = slam.colors_.view(-1, 3).cpu().numpy()[:slam.m]
+    points = np.array([(x,y,z,r,g,b) for (x,y,z),(r,g,b) in zip(points, colors)],
+                      dtype=[('x', '<f4'), ('y', '<f4'), ('z', '<f4'),('red', 'u1'), ('green', 'u1'),('blue', 'u1')])
+    el = PlyElement.describe(points, 'vertex',{'some_property': 'f8'},{'some_property': 'u4'})
+
+    # Filtrer les points qui sont dans la distance maximale
+    max_distance = 3.0
+
+    # Calculer la distance euclidienne des points par rapport à l'origine
+    x = points['x']
+    y = points['y']
+    z = points['z']
+    
+    distances = np.sqrt(x ** 2 + y ** 2 + z ** 2)
+    
+    # Filtrer les points qui sont dans la distance maximale
+    filtered_points = points[distances <= max_distance]
+
+    el = PlyElement.describe(filtered_points, 'vertex', 
+                             {'x': 'f4', 'y': 'f4', 'z': 'f4', 'red': 'u1', 'green': 'u1', 'blue': 'u1'})
+
+    ply_data = PlyData([el], text=True)
+    ply_data.write("output_test.ply")
+
+# Lire le fichier PLY
+    ply_data = PlyData.read("output_test.ply")
+
+# Compter le nombre de points
+    num_points = len(ply_data['vertex'].data)
+    print(f"Nombre de points dans le fichier output PLY : {num_points}")
+
+    if DEBUG: import pdb; pdb.set_trace()
+
+
+    ply_data = PlyData([el], text=True)
+    ply_data.write("pointcloud_test.ply")
+
+# Lire le fichier PLY
+    ply_data = PlyData.read("pointcloud_test.ply")
+
+# Compter le nombre de points
+    num_points = len(ply_data['vertex'].data)
+    print(f"Nombre de points dans le fichier PLY : {num_points}")
+    
+# Charger le fichier PLY
+    ply_file_path = "pointcloud_test.ply"
+    pcd = o3d.io.read_point_cloud(ply_file_path)
+
+# Visualiser le point cloud
+    o3d.visualization.draw_geometries([pcd])
+
+    print("ply saved ...")
+    time.sleep(10)
+
 
 
     print("---- END TRACKING")
 
-    for _ in range(12):
-        slam.update()
-
-    print("---- END GLOBAL BA")
+    # for _ in range(12):
+    #     slam.update()
+    #
+    # print("---- END GLOBAL BA")
 
     # while True:
     #     print("wait ...")

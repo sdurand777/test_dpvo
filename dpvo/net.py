@@ -169,7 +169,7 @@ class Patchifier(nn.Module):
         return new_image
 
     #def forward(self, images, patches_per_image=80, disps=None, gradient_bias=False, return_color=False):
-    def __call__(self, images, patches_per_image=80, disps=None, gradient_bias=False, return_color=False):
+    def __call__(self, images, disps=None, patches_per_image=80, gradient_bias=False, return_color=False):
 
         """ extract patches from input images """
         if DEBUG: import pdb; pdb.set_trace()
@@ -201,12 +201,29 @@ class Patchifier(nn.Module):
             # on multiplie par 4 pour recuperer les valeurs de couleur direct sur l'image pleine taille
             clr = altcorr.patchify(images[0], 4*(coords + 0.5), 0).view(b, -1, 3)
 
+        if DEBUG: import pdb; pdb.set_trace()
+
         if disps is None:
             disps = torch.ones(b, n, h, w, device="cuda")
+        # else:
+        #     disps = altcorr.patchify(disps, 4*(coords + 0.5), 0).view(b, -1, P, P)
+
+        if DEBUG: import pdb; pdb.set_trace()
 
         # grid 3, 132, 240 pour recuperer les indices pour els patches
-        grid, _ = coords_grid_with_index(disps, device=fmap.device)
+        disps = disps.unsqueeze(0).unsqueeze(0)
+# Diviser les dimensions par 4
+        new_height = disps.shape[2] // 4
+        new_width = disps.shape[3] // 4
 
+# Redimensionner l'image en divisant les dimensions par 4
+        disps_resized = F.interpolate(disps, size=(new_height, new_width), mode='bilinear', align_corners=False)
+        disps_resized = disps_resized.to(fmap.device)
+
+        if DEBUG: import pdb; pdb.set_trace()
+        grid, _ = coords_grid_with_index(disps_resized, device=fmap.device)
+
+        if DEBUG: import pdb; pdb.set_trace()
         patches = altcorr.patchify(grid[0], coords, P//2).view(b, -1, 3, P, P)
 
         index = torch.arange(n, device="cuda").view(n, 1)

@@ -215,7 +215,9 @@ def image_ivm_300_stream(queue, imagedir, stride, skip=0):
     print("depth_list : ", depth_list[:10])
 
 
-    for t, imfile in enumerate(image_list):
+    #for t, imfile in enumerate(image_list):
+
+    for t, (imfile, depth_file) in enumerate(zip(image_list, depth_list)):
         image = cv2.imread(str(imfile))
 
        
@@ -285,11 +287,21 @@ def image_ivm_300_stream(queue, imagedir, stride, skip=0):
         intrinsics[2] *= image_size[1] / wd0
         intrinsics[3] *= image_size[0] / ht0
 
+        depth = -np.load(depth_file)/1000
+        # print("depth values : ")
+        # print("depth min : ",np.min(depth))
+        # print("depth max : ",np.max(depth))
+        # print("depth shape : ",depth.shape)
+        depth = torch.as_tensor(depth)
+        depth = F.interpolate(depth[None,None], image_size).squeeze()
+
+        # disps_sens
+        disp_sens = torch.where(depth>0, 1.0/depth, depth)
         #image = img[:h-h%16, :w-w%16]
 
-        queue.put((t, images.squeeze(0), intrinsics))
+        queue.put((t, images.squeeze(0), disp_sens, intrinsics))
 
-    queue.put((-1, images.squeeze(0), intrinsics))
+    queue.put((-1, images.squeeze(0), disp_sens, intrinsics))
 
 
 
