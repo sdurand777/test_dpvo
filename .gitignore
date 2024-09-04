@@ -10,3 +10,6 @@ movies/
 
 # Ignorer le fichier TartanAir.pickle
 TartanAir.pickle
+
+# data ivm for pipe
+test_pipe/
