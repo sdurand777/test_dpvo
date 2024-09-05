@@ -457,10 +457,10 @@ class DPVO:
         # So after initialization no more depth info used from patches
 
         # TODO better depth initialization
-        # patches[:,:,2] = torch.rand_like(patches[:,:,2,0,0,None,None])
-        # if self.is_initialized:
-        #     s = torch.median(self.patches_[self.n-3:self.n,:,2])
-        #     patches[:,:,2] = s
+        patches[:,:,2] = torch.rand_like(patches[:,:,2,0,0,None,None])
+        if self.is_initialized:
+            s = torch.median(self.patches_[self.n-3:self.n,:,2])
+            patches[:,:,2] = s
 
         self.patches_[self.n] = patches
 
