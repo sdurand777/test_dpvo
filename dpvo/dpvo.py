@@ -350,6 +350,8 @@ class DPVO:
         self.remove_factors(to_remove)
 
     def update(self):
+
+        # reprojection RAFT tp update flow weights so target for BA
         with Timer("other", enabled=self.enable_timing):
             coords = self.reproject()
 
@@ -363,6 +365,7 @@ class DPVO:
             weight = weight.float()
             target = coords[...,self.P//2,self.P//2] + delta.float()
 
+        # BA to update poses and depth values
         with Timer("BA", enabled=self.enable_timing):
             t0 = self.n - self.cfg.OPTIMIZATION_WINDOW if self.is_initialized else 1
             t0 = max(t0, 1)
