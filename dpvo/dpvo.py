@@ -371,7 +371,7 @@ class DPVO:
             t0 = max(t0, 1)
 
             try:
-                import pdb; pdb.set_trace()
+                #import pdb; pdb.set_trace()
                 fastba.BA(self.poses, self.patches, self.intrinsics, 
                     target, weight, lmbda, self.ii, self.jj, self.kk, t0, self.n, 2)
             except:
@@ -380,7 +380,7 @@ class DPVO:
             points = pops.point_cloud(SE3(self.poses), self.patches[:, :self.m], self.intrinsics, self.ix[:self.m])
             points = (points[...,1,1,:3] / points[...,1,1,3:]).reshape(-1, 3)
             self.points_[:len(points)] = points[:]
-            import pdb; pdb.set_trace()
+            #import pdb; pdb.set_trace()
 
                 
     def __edges_all(self):
@@ -406,7 +406,7 @@ class DPVO:
     def __call__(self, tstamp, image, disp=None, intrinsics=None):
 
         """ track new frame """
-        #import pdb; pdb.set_trace()
+        if DEBUG: import pdb; pdb.set_trace()
     
         if (self.n+1) >= self.N:
             raise Exception(f'The buffer size is too small. You can increase it using "--buffer {self.N*2}"')
@@ -432,7 +432,7 @@ class DPVO:
                                         return_color=True)
 
         """ patchifier done """
-        #import pdb; pdb.set_trace()
+        if DEBUG: import pdb; pdb.set_trace()
 
 
         ### update state attributes ###

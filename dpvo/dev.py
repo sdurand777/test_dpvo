@@ -52,6 +52,8 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
 
     reader.start()
 
+    disp = None    
+
     try:
         while True:
             try:
@@ -63,6 +65,8 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
             if t == STOP_SIGNAL or t == 20:
                 break
 
+            print("Frame : ", t)
+
             image = torch.from_numpy(image).permute(2, 0, 1).cuda()
             intrinsics = torch.from_numpy(intrinsics).cuda()
 
@@ -72,7 +76,7 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
             image = image.cuda()
             intrinsics = intrinsics.cuda()
 
-            slam(t, image, intrinsics)
+            slam(t, image, disp, intrinsics)
 
     except Exception as e:
         print(f"Erreur pendant le traitement : {e}")
@@ -174,26 +178,32 @@ if __name__ == '__main__':
         config.trace_filter = GlobbingFilter(
                 #include=['dpvo.net.*'],  # Inclure explicitement le module torch
                 exclude=['numpy.*', 
-                                                      'pdb.*',
-                                                      'pycallgraph2.*' ,
-                                                      '_*', 
-                                                      'shutil', 
-                                                      'os', 
-                                                      're', 
-                                                      'sys', 
-                                                      'module_from_spec.*',
-                                                      'module_from_spec',
-                                                      'SourceFileLoader.*',
-                                                      'FileFinder.*',
-                                                      'find_spec', 
-                                                      '<listcomp>',
-                                                      '<genexpr>',
-                                                      'spec_from_file_location',
-                                                      'cache_from_source',
-                                                      'cb',
-                                                      '<lambda>',
-                                                      'VFModule.*',
-                                                      'ModuleSpec.*'])
+                         'pdb.*',
+                         'pycallgraph2.*' ,
+                         '_*', 
+                         'shutil', 
+                         'os', 
+                         're', 
+                         'sys', 
+                         'module_from_spec.*',
+                         'module_from_spec',
+                         'SourceFileLoader.*',
+                         'FileFinder.*',
+                         'find_spec', 
+                         '<listcomp>',
+                         '<genexpr>',
+                         'spec_from_file_location',
+                         'cache_from_source',
+                         'cb',
+                         '<lambda>',
+                         'VFModule.*',
+                         'ModuleSpec.*',
+                         'lietorch.*',
+                         'utils.*',
+                         'extractor.*',
+                         'blocks.*',
+                         'projective_ops.*',
+                         'altcorr.*'])
 
         graphviz = GraphvizOutput()
         graphviz.output_file = 'callgraph.pdf'
