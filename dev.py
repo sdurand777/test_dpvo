@@ -70,7 +70,7 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
             print("Frame : ", t)
 
             """ stop dans la loop """
-            if DEBUG: import pdb; pdb.set_trace()
+#             if DEBUG: import pdb; pdb.set_trace()
 
             image = torch.from_numpy(image).permute(2, 0, 1).cuda()
             intrinsics = torch.from_numpy(intrinsics).cuda()
