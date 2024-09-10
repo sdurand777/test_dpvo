@@ -21,7 +21,7 @@ from . import projective_ops as pops
 
 from PIL import Image
 
-DEBUG = False
+DEBUG = True
 
 # import fastba
 # import altcorr

@@ -419,6 +419,7 @@ class DPVO:
             print("image.dtype : ", image.dtype)
             self.viewer.update_image(image)
 
+        # normalisation image avant patchifier
         image = 2 * (image[None,None] / 255.0) - 0.5
         
         # recuperer disp pour patchify
