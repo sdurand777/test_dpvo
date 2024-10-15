@@ -26,6 +26,7 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
 
     slam = None
     queue = Queue(maxsize=8)
+    disps = None
 
     if os.path.isdir(imagedir):
         reader = Process(target=image_stream, args=(queue, imagedir, calib, stride, skip))
@@ -48,7 +49,7 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
         intrinsics = intrinsics.cuda()
 
         #with Timer("SLAM", enabled=timeit):
-        slam(t, image, intrinsics)
+        slam(t, image, disps, intrinsics)
 
     for _ in range(12):
         slam.update()
@@ -69,7 +70,7 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--network', type=str, default='dpvo.pth')
+    parser.add_argument('--network', type=str, default='/home/smith/test_dpvo/dpvo.pth')
     parser.add_argument('--imagedir', type=str)
     parser.add_argument('--calib', type=str)
     parser.add_argument('--stride', type=int, default=2)

@@ -55,18 +55,19 @@ def proj(X, intrinsics, depth=False):
 def transform(poses, patches, intrinsics, ii, jj, kk, depth=False, valid=False, jacobian=False, tonly=False):
     """ projective transform """
 
-    # backproject
+    # backproject to 3D
     X0 = iproj(patches[:,kk], intrinsics[:,ii])
 
-    # transform
+    # transform relative between i and j
     Gij = poses[:, jj] * poses[:, ii].inv()
 
     if tonly:
         Gij[...,3:] = torch.as_tensor([0,0,0,1], device=Gij.device)
 
+    # apply relative transfo to 3D point in frame i
     X1 = Gij[:,:,None,None] * X0
 
-    # project
+    # project projection on image j to get pixel on image j
     x1 = proj(X1, intrinsics[:,jj], depth)
 
 
@@ -100,6 +101,7 @@ def transform(poses, patches, intrinsics, ii, jj, kk, depth=False, valid=False, 
 
         return x1, (Z > 0.2).float(), (Ji, Jj, Jz)
 
+    # check valid depth based on X1
     if valid:
         return x1, (X1[...,2] > 0.2).float()
         

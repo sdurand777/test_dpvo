@@ -21,7 +21,7 @@ from . import projective_ops as pops
 
 from PIL import Image
 
-DEBUG = True
+DEBUG = False
 
 # import fastba
 # import altcorr
@@ -177,7 +177,7 @@ class Patchifier(nn.Module):
         # extraction des features
         fmap = self.fnet(images) / 4.0 # [1, 1; 128, 132, 240]
 
-        imap = self.inet(images) / 4.0 # {1, 1, 385; 132, 240}
+        imap = self.inet(images) / 4.0 # {1, 1, 384; 132, 240}
 
         """ extract patches from input images """
         if DEBUG: import pdb; pdb.set_trace()

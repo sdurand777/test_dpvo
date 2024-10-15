@@ -257,18 +257,38 @@ class DPVO:
 
     def corr(self, coords, indicies=None):
         """ local correlation volume """
+
+        import pdb; pdb.set_trace()
+
+        # on recupere les indices
         ii, jj = indicies if indicies is not None else (self.kk, self.jj)
+        # on utilise la memoire circulaire self.mem pour recuperer les bons indices sur les 32 stockes
+        # indices des patches
         ii1 = ii % (self.M * self.mem)
+        # indices de la frame sur laquelle reprojete les patches
         jj1 = jj % (self.mem)
+        # on recupere directement les correlations dans la pyramide
+        # level 1 pleine taille 132 240
+        # corr1 shape [1, 96, 7 ,7, 3, 3]
         corr1 = altcorr.corr(self.gmap, self.pyramid[0], coords / 1, ii1, jj1, 3)
+        # level 2 divise par 4
+        # corr2 shape [1, 96, 7 ,7, 3, 3]
         corr2 = altcorr.corr(self.gmap, self.pyramid[1], coords / 4, ii1, jj1, 3)
+        # on stack tout
         return torch.stack([corr1, corr2], -1).view(1, len(ii), -1)
+
+
 
     def reproject(self, indicies=None):
         """ reproject patch k from i -> j """
+        # recuperation des indices si None
         (ii, jj, kk) = indicies if indicies is not None else (self.ii, self.jj, self.kk)
+        # on a les coords de patches a reprojeter dans self.patches
         coords = pops.transform(SE3(self.poses), self.patches, self.intrinsics, ii, jj, kk)
+        # reshape coords
         return coords.permute(0, 1, 4, 2, 3).contiguous()
+
+
 
     def append_factors(self, ii, jj):
         self.jj = torch.cat([self.jj, jj])
@@ -278,24 +298,40 @@ class DPVO:
         net = torch.zeros(1, len(ii), self.DIM, **self.kwargs)
         self.net = torch.cat([self.net, net], dim=1)
 
+
+
     def remove_factors(self, m):
         self.ii = self.ii[~m]
         self.jj = self.jj[~m]
         self.kk = self.kk[~m]
         self.net = self.net[:,~m]
 
+
+
     def motion_probe(self):
         """ kinda hacky way to ensure enough motion for initialization """
+
+        import pdb; pdb.set_trace()
+
+        # indice des patches
         kk = torch.arange(self.m-self.M, self.m, device="cuda")
+        # incide noeud ou image actuel
         jj = self.n * torch.ones_like(kk)
+        # indice noeuds des patches qui vont etre projete
         ii = self.ix[kk]
 
+        # latent state for raft
         net = torch.zeros(1, len(ii), self.DIM, **self.kwargs)
+
+        # get coords reprojection of patches kk of  ii to jj 
         coords = self.reproject(indicies=(ii, jj, kk))
 
         with autocast(enabled=self.cfg.MIXED_PRECISION):
+            # compute correlation
             corr = self.corr(coords, indicies=(kk, jj))
+            # get context features for the patches kk
             ctx = self.imap[:,kk % (self.M * self.mem)]
+            # apply raft to the patches
             net, (delta, weight, _) = \
                 self.network.update(net, ctx, corr, None, ii, jj, kk)
 
@@ -403,10 +439,16 @@ class DPVO:
         return flatmeshgrid(torch.arange(t0, t1, device="cuda"),
             torch.arange(max(self.n-r, 0), self.n, device="cuda"), indexing='ij')
 
+
+
+
     def __call__(self, tstamp, image, disp=None, intrinsics=None):
 
         """ track new frame """
         if DEBUG: import pdb; pdb.set_trace()
+
+        import pdb; pdb.set_trace()
+
     
         if (self.n+1) >= self.N:
             raise Exception(f'The buffer size is too small. You can increase it using "--buffer {self.N*2}"')
@@ -445,7 +487,9 @@ class DPVO:
         clr = (clr[0,:,[2,1,0]] + 0.5) * (255.0 / 2)
         self.colors_[self.n] = clr.to(torch.uint8)
 
+        # index nombre de frames
         self.index_[self.n + 1] = self.n + 1
+        # index nombre de patches
         self.index_map_[self.n + 1] = self.m + self.M
 
         if self.n > 1:
@@ -453,8 +497,11 @@ class DPVO:
                 P1 = SE3(self.poses_[self.n-1])
                 P2 = SE3(self.poses_[self.n-2])
                 
+                # calcul dans la lie algebra du deplacement relatif
                 xi = self.cfg.MOTION_DAMPING * (P1 * P2.inv()).log()
+                # retractation sur SE3  sur la frame n - 1
                 tvec_qvec = (SE3.exp(xi) * P1).data
+                # initialise pose actuelle avec tvec_qvec
                 self.poses_[self.n] = tvec_qvec
             else:
                 tvec_qvec = self.poses[self.n-1]
@@ -472,6 +519,7 @@ class DPVO:
         self.patches_[self.n] = patches
 
         ### update network attributes ###
+        # on utilise self.mem pour reecrir par dessus les donnees au dela de self.mem
         self.imap_[self.n % self.mem] = imap.squeeze()
         self.gmap_[self.n % self.mem] = gmap.squeeze()
         self.fmap1_[:, self.n % self.mem] = F.avg_pool2d(fmap[0], 1, 1)
@@ -480,6 +528,7 @@ class DPVO:
         self.counter += 1        
         if self.n > 0 and not self.is_initialized:
             if self.motion_probe() < 2.0:
+                # on garde les poses pour reconstituer toute la trajectoire
                 self.delta[self.counter - 1] = (self.counter - 2, Id[0])
                 return
 
@@ -490,12 +539,15 @@ class DPVO:
         self.append_factors(*self.__edges_forw())
         self.append_factors(*self.__edges_back())
 
+        # initialisation
         if self.n == 8 and not self.is_initialized:
             self.is_initialized = True            
 
+            # 12 iterations update
             for itr in range(12):
                 self.update()
         
+        # classic update
         elif self.is_initialized:
             self.update()
             self.keyframe()
