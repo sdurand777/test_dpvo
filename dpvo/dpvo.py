@@ -269,6 +269,13 @@ class DPVO:
         to_remove = self.ix[self.kk] < self.n - self.cfg.REMOVAL_WINDOW
         self.remove_factors(to_remove)
 
+
+
+
+
+
+
+    # fonction pour update
     def update(self):
         with Timer("other", enabled=self.enable_timing):
             coords = self.reproject()
