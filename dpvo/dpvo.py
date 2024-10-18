@@ -258,7 +258,7 @@ class DPVO:
     def corr(self, coords, indicies=None):
         """ local correlation volume """
 
-        import pdb; pdb.set_trace()
+        #import pdb; pdb.set_trace()
 
         # on recupere les indices
         ii, jj = indicies if indicies is not None else (self.kk, self.jj)
@@ -289,13 +289,24 @@ class DPVO:
         return coords.permute(0, 1, 4, 2, 3).contiguous()
 
 
-
+    # fonction pour ajouter les factors
     def append_factors(self, ii, jj):
+        
+        #import pdb; pdb.set_trace()
+
+        # ii ici indices des patches avec les fonctions edges_for et edges_back
+        # jj indices des frames
+
+        # incides des frames cibles
         self.jj = torch.cat([self.jj, jj])
+        # indices patches 
         self.kk = torch.cat([self.kk, ii])
+        # avec self.ix recuperation des indices des frames sources a partir des patches
         self.ii = torch.cat([self.ii, self.ix[ii]])
 
+        # update net latent state for the conv gru with the new edges
         net = torch.zeros(1, len(ii), self.DIM, **self.kwargs)
+
         self.net = torch.cat([self.net, net], dim=1)
 
 
@@ -311,7 +322,7 @@ class DPVO:
     def motion_probe(self):
         """ kinda hacky way to ensure enough motion for initialization """
 
-        import pdb; pdb.set_trace()
+        #import pdb; pdb.set_trace()
 
         # indice des patches
         kk = torch.arange(self.m-self.M, self.m, device="cuda")
@@ -337,6 +348,8 @@ class DPVO:
 
         return torch.quantile(delta.norm(dim=-1).float(), 0.5)
 
+
+    # mesure amplitude du mouvement entre i et j
     def motionmag(self, i, j):
         k = (self.ii == i) & (self.jj == j)
         ii = self.ii[k]
@@ -346,20 +359,34 @@ class DPVO:
         flow = pops.flow_mag(SE3(self.poses), self.patches, self.intrinsics, ii, jj, kk, beta=0.5)
         return flow.mean().item()
 
+
     def keyframe(self):
 
-        i = self.n - self.cfg.KEYFRAME_INDEX - 1
-        j = self.n - self.cfg.KEYFRAME_INDEX + 1
+        import pdb; pdb.set_trace()
+
+        # KEYFRAME INDEX set to 4 on regarde les frames proches
+        i = self.n - self.cfg.KEYFRAME_INDEX - 1 # KF - 5
+        j = self.n - self.cfg.KEYFRAME_INDEX + 1 # KF - 3
         m = self.motionmag(i, j) + self.motionmag(j, i)
  
-        if m / 2 < self.cfg.KEYFRAME_THRESH:
-            k = self.n - self.cfg.KEYFRAME_INDEX
-            t0 = self.tstamps_[k-1].item()
-            t1 = self.tstamps_[k].item()
 
+        # KEYFRAME THRESH set to 15 en pixel pour le deplacement on divise m par deux pour la moyenne 
+        # si le deplacement est inferieur au seuil alors on elimine KF - 4 trop redondante
+        if m / 2 < self.cfg.KEYFRAME_THRESH:
+            # recuperation indice frame k -3 par rapport a la KF actuelle
+            k = self.n - self.cfg.KEYFRAME_INDEX # KF - 4
+            # pose k-1
+            t0 = self.tstamps_[k-1].item() # KF - 5
+            # pose k
+            t1 = self.tstamps_[k].item() # KF - 4
+
+            # deplacement relatif
             dP = SE3(self.poses_[k]) * SE3(self.poses_[k-1]).inv()
+
+            # save delta pour avoir la trajectoir complete a la fin
             self.delta[t1] = (t0, dP)
 
+            # on supprime la frame k du graph
             to_remove = (self.ii == k) | (self.jj == k)
             self.remove_factors(to_remove)
 
@@ -367,6 +394,7 @@ class DPVO:
             self.ii[self.ii > k] -= 1
             self.jj[self.jj > k] -= 1
 
+            # gestion des indices
             for i in range(k, self.n-1):
                 self.tstamps_[i] = self.tstamps_[i+1]
                 self.colors_[i] = self.colors_[i+1]
@@ -382,13 +410,19 @@ class DPVO:
             self.n -= 1
             self.m-= self.M
 
+        # on elimine les edges trop vieux au de la de REMOVAL_WINDOW set a 22
         to_remove = self.ix[self.kk] < self.n - self.cfg.REMOVAL_WINDOW
         self.remove_factors(to_remove)
 
     def update(self):
 
+        #import pdb; pdb.set_trace()
+
         # reprojection RAFT tp update flow weights so target for BA
+        # ce with timer just pour encapsuler le temps pour cette partie du code
         with Timer("other", enabled=self.enable_timing):
+            # calculer toutes les reprojection pour le graph
+            # coords shape [1, 6144, 2, 3, 3]
             coords = self.reproject()
 
             with autocast(enabled=True):
@@ -399,21 +433,55 @@ class DPVO:
 
             lmbda = torch.as_tensor([1e-4], device="cuda")
             weight = weight.float()
+            # on recupere le centre de coords et on applique le terme correctif delta
             target = coords[...,self.P//2,self.P//2] + delta.float()
 
         # BA to update poses and depth values
         with Timer("BA", enabled=self.enable_timing):
+            # t0 minimale OPTIMIZATION WINDOW set to 10
             t0 = self.n - self.cfg.OPTIMIZATION_WINDOW if self.is_initialized else 1
+            # t0 min 1 on optimise pas la frame 0 sa pose reste Identite definitivement
             t0 = max(t0, 1)
 
             try:
                 #import pdb; pdb.set_trace()
+
+                # recuperation des data pour faire tourner directement en cuda
+                my_values = {
+                    'poses': self.poses.to('cpu'),
+                    'patches': self.patches.to('cpu'),
+                    'intrinsics': self.intrinsics[0].to('cpu'),
+                    'target': target.to('cpu'),
+                    'weight': weight.to('cpu'),
+                    'lmbda': lmbda.to('cpu'),
+                    't0': t0,
+                    'n': self.n,
+                    'ii': self.ii.to('cpu'),
+                    'jj': self.jj.to('cpu'),
+                    'kk': self.kk.to('cpu'),
+                }
+
+                class Container(torch.nn.Module):
+                    def __init__(self, my_values):
+                        super().__init__()
+                        for key in my_values:
+                            setattr(self, key, my_values[key])
+
+# Save arbitrary values supported by TorchScript
+# https://pytorch.org/docs/master/jit.html#supported-type
+                container = torch.jit.script(Container(my_values))
+                container.save("container.pt")
+
                 fastba.BA(self.poses, self.patches, self.intrinsics, 
                     target, weight, lmbda, self.ii, self.jj, self.kk, t0, self.n, 2)
             except:
                 print("Warning BA failed...")
             
+            # extraire points 3D 
+            # points shape [1,768,3,3,4]
             points = pops.point_cloud(SE3(self.poses), self.patches[:, :self.m], self.intrinsics, self.ix[:self.m])
+            # on recupere uniquement le centre du patch en divisant par d pour recuperer le point 3D
+            # points [768,3]
             points = (points[...,1,1,:3] / points[...,1,1,3:]).reshape(-1, 3)
             self.points_[:len(points)] = points[:]
             #import pdb; pdb.set_trace()
@@ -424,8 +492,14 @@ class DPVO:
             torch.arange(0, self.m, device="cuda"),
             torch.arange(0, self.n, device="cuda"), indexing='ij')
 
+    # edges forward
     def __edges_forw(self):
+
+        #import pdb; pdb.set_trace()
+
+        # set to 13
         r=self.cfg.PATCH_LIFETIME
+        # self.M donc en nombre de patch
         t0 = self.M * max((self.n - r), 0)
         t1 = self.M * max((self.n - 1), 0)
         return flatmeshgrid(
@@ -433,6 +507,9 @@ class DPVO:
             torch.arange(self.n-1, self.n, device="cuda"), indexing='ij')
 
     def __edges_back(self):
+
+        #import pdb; pdb.set_trace()
+
         r=self.cfg.PATCH_LIFETIME
         t0 = self.M * max((self.n - 1), 0)
         t1 = self.M * max((self.n - 0), 0)
@@ -447,18 +524,13 @@ class DPVO:
         """ track new frame """
         if DEBUG: import pdb; pdb.set_trace()
 
-        import pdb; pdb.set_trace()
+        #import pdb; pdb.set_trace()
 
-    
+        # self.N buffer et self.n+1 current frame id
         if (self.n+1) >= self.N:
             raise Exception(f'The buffer size is too small. You can increase it using "--buffer {self.N*2}"')
 
         if self.viewer is not None:
-            print("image.shape : ",image.shape)
-            print(torch.min(image))
-            print(torch.max(image))
-            print("image \n", image)
-            print("image.dtype : ", image.dtype)
             self.viewer.update_image(image)
 
         # normalisation image avant patchifier
@@ -535,13 +607,20 @@ class DPVO:
         self.n += 1
         self.m += self.M
 
+        #import pdb; pdb.set_trace()
+
         # relative pose
+        # edges patches passes vers frame actuel
         self.append_factors(*self.__edges_forw())
+
+        # edges patches actuels vers frames passes et actuels
         self.append_factors(*self.__edges_back())
 
         # initialisation
         if self.n == 8 and not self.is_initialized:
             self.is_initialized = True            
+
+            #import pdb; pdb.set_trace()
 
             # 12 iterations update
             for itr in range(12):
