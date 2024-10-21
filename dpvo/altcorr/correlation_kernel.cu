@@ -79,6 +79,10 @@ __global__ void patchify_backward_kernel(int R,
   }
 }
 
+
+
+
+// method pour correlation entre les patches et les level de la pyramid fmap1 feature map patchify et fmap2 level de la pyramid
 template <typename scalar_t>
 __global__ void corr_forward_kernel(int R,
     const torch::PackedTensorAccessor32<scalar_t,5,torch::RestrictPtrTraits> fmap1,
@@ -223,6 +227,7 @@ std::vector<torch::Tensor> corr_cuda_forward(
   torch::Tensor dx = x - x.floor(); dx = dx.to(fmap1.dtype());
   torch::Tensor dy = y - y.floor(); dy = dy.to(fmap2.dtype());
 
+  // bilinear interpolation
   torch::Tensor out;
   out  = (1 - dx) * (1 - dy) * corr.index({Slice(), Slice(), Slice(0, D-1), Slice(0, D-1)});
   out +=     (dx) * (1 - dy) * corr.index({Slice(), Slice(), Slice(0, D-1), Slice(1, D-0)});

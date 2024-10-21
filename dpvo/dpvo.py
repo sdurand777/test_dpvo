@@ -54,7 +54,7 @@ Id = SE3.Identity(1, device="cuda")
 
 
 class DPVO:
-    def __init__(self, cfg, network, ht=480, wd=640, viz=False):
+    def __init__(self, cfg, network, ht=480, wd=640, viz=False, stereo=False):
         self.cfg = cfg
         self.load_weights(network)
         self.is_initialized = False
@@ -106,8 +106,16 @@ class DPVO:
         self.fmap1_ = torch.zeros(1, self.mem, 128, ht // 1, wd // 1, **kwargs)
         self.fmap2_ = torch.zeros(1, self.mem, 128, ht // 4, wd // 4, **kwargs)
 
+        # for right frames
+        self.fmap1_right = torch.zeros(1, self.mem, 128, ht // 1, wd // 1, **kwargs)
+        self.fmap2_right = torch.zeros(1, self.mem, 128, ht // 4, wd // 4, **kwargs)
+
+
         # feature pyramid
         self.pyramid = (self.fmap1_, self.fmap2_)
+
+        # pyramid right
+        self.pyramid_right = (self.fmap1_right, self.fmap2_right)
 
         self.net = torch.zeros(1, 0, DIM, **kwargs)
         self.ii = torch.as_tensor([], dtype=torch.long, device="cuda")
@@ -119,6 +127,8 @@ class DPVO:
 
         # store relative poses for removed frames
         self.delta = {}
+
+        self.stereo = stereo
 
         self.viewer = None
         if viz:
@@ -255,36 +265,77 @@ class DPVO:
         return 0
 
 
-    def corr(self, coords, indicies=None):
+    def corr(self, coords, indicies=None, stereo=False):
         """ local correlation volume """
 
         #import pdb; pdb.set_trace()
 
-        # on recupere les indices
-        ii, jj = indicies if indicies is not None else (self.kk, self.jj)
-        # on utilise la memoire circulaire self.mem pour recuperer les bons indices sur les 32 stockes
-        # indices des patches
-        ii1 = ii % (self.M * self.mem)
-        # indices de la frame sur laquelle reprojete les patches
-        jj1 = jj % (self.mem)
-        # on recupere directement les correlations dans la pyramide
-        # level 1 pleine taille 132 240
-        # corr1 shape [1, 96, 7 ,7, 3, 3]
-        corr1 = altcorr.corr(self.gmap, self.pyramid[0], coords / 1, ii1, jj1, 3)
-        # level 2 divise par 4
-        # corr2 shape [1, 96, 7 ,7, 3, 3]
-        corr2 = altcorr.corr(self.gmap, self.pyramid[1], coords / 4, ii1, jj1, 3)
+        if stereo:
+            # on recupere les indices
+            ii, jj, kk = indicies if indicies is not None else (self.ii, self.jj, self.kk)
+            ii1 = ii % (self.mem)
+            jj1 = jj % (self.mem)
+            kk1 = kk % (self.M * self.mem)
+
+            corr1 = altcorr.corr(self.gmap, self.pyramid[0], coords / 1, kk1, jj1, 3)
+            # level 2 divise par 4
+            # corr2 shape [1, 96, 7 ,7, 3, 3]
+            corr2 = altcorr.corr(self.gmap, self.pyramid[1], coords / 4, kk1, jj1, 3)
+        else:
+            # on recupere les indices
+            ii, jj = indicies if indicies is not None else (self.kk, self.jj)
+            # on utilise la memoire circulaire self.mem pour recuperer les bons indices sur les 32 stockes
+            # indices des patches
+            ii1 = ii % (self.M * self.mem)
+            # indices de la frame sur laquelle reprojete les patches
+            jj1 = jj % (self.mem)
+
+            # recuperer les data entrees pour rejouer correlation
+            if len(ii) == 6144:
+                my_values = {
+                    'gmap': self.gmap.to('cpu'),
+                    'pyramid': self.pyramid[0].to('cpu'),
+                    'coords': coords.to('cpu'),
+                    'kk1': ii1.to('cpu'),
+                    'jj1': jj1.to('cpu'),
+                }
+
+                class Container(torch.nn.Module):
+                    def __init__(self, my_values):
+                        super().__init__()
+                        for key in my_values:
+                            setattr(self, key, my_values[key])
+
+# Save arbitrary values supported by TorchScript
+# https://pytorch.org/docs/master/jit.html#supported-type
+                container = torch.jit.script(Container(my_values))
+                container.save("container_corr_dpvo.pt")
+
+                import pdb; pdb.set_trace()
+
+
+
+
+
+            # on recupere directement les correlations dans la pyramide
+            # level 1 pleine taille 132 240
+            # corr1 shape [1, 96, 7 ,7, 3, 3]
+            corr1 = altcorr.corr(self.gmap, self.pyramid[0], coords / 1, ii1, jj1, 3)
+            # level 2 divise par 4
+            # corr2 shape [1, 96, 7 ,7, 3, 3]
+            corr2 = altcorr.corr(self.gmap, self.pyramid[1], coords / 4, ii1, jj1, 3)
         # on stack tout
         return torch.stack([corr1, corr2], -1).view(1, len(ii), -1)
 
 
 
-    def reproject(self, indicies=None):
+    def reproject(self, indicies=None, stereo=False):
         """ reproject patch k from i -> j """
+
         # recuperation des indices si None
         (ii, jj, kk) = indicies if indicies is not None else (self.ii, self.jj, self.kk)
         # on a les coords de patches a reprojeter dans self.patches
-        coords = pops.transform(SE3(self.poses), self.patches, self.intrinsics, ii, jj, kk)
+        coords = pops.transform(SE3(self.poses), self.patches, self.intrinsics, ii, jj, kk, stereo=stereo)
         # reshape coords
         return coords.permute(0, 1, 4, 2, 3).contiguous()
 
@@ -414,6 +465,8 @@ class DPVO:
         to_remove = self.ix[self.kk] < self.n - self.cfg.REMOVAL_WINDOW
         self.remove_factors(to_remove)
 
+
+    # main update fonction reprojection to index corr to raft to compute targets then BA to update pose and disp values based on targets
     def update(self):
 
         #import pdb; pdb.set_trace()
@@ -423,10 +476,15 @@ class DPVO:
         with Timer("other", enabled=self.enable_timing):
             # calculer toutes les reprojection pour le graph
             # coords shape [1, 6144, 2, 3, 3]
+            #coords = self.reproject(stereo=self.stereo)
             coords = self.reproject()
 
             with autocast(enabled=True):
+                # gestion du cas stereo
+                #corr = self.corr(coords, stereo=self.stereo)
                 corr = self.corr(coords)
+
+                # uniquement context de gauche pour rappel
                 ctx = self.imap[:,self.kk % (self.M * self.mem)]
                 self.net, (delta, weight, _) = \
                     self.network.update(self.net, ctx, corr, None, self.ii, self.jj, self.kk)
@@ -447,30 +505,30 @@ class DPVO:
                 #import pdb; pdb.set_trace()
 
                 # recuperation des data pour faire tourner directement en cuda
-                my_values = {
-                    'poses': self.poses.to('cpu'),
-                    'patches': self.patches.to('cpu'),
-                    'intrinsics': self.intrinsics[0].to('cpu'),
-                    'target': target.to('cpu'),
-                    'weight': weight.to('cpu'),
-                    'lmbda': lmbda.to('cpu'),
-                    't0': t0,
-                    'n': self.n,
-                    'ii': self.ii.to('cpu'),
-                    'jj': self.jj.to('cpu'),
-                    'kk': self.kk.to('cpu'),
-                }
-
-                class Container(torch.nn.Module):
-                    def __init__(self, my_values):
-                        super().__init__()
-                        for key in my_values:
-                            setattr(self, key, my_values[key])
-
-# Save arbitrary values supported by TorchScript
-# https://pytorch.org/docs/master/jit.html#supported-type
-                container = torch.jit.script(Container(my_values))
-                container.save("container.pt")
+#                 my_values = {
+#                     'poses': self.poses.to('cpu'),
+#                     'patches': self.patches.to('cpu'),
+#                     'intrinsics': self.intrinsics[0].to('cpu'),
+#                     'target': target.to('cpu'),
+#                     'weight': weight.to('cpu'),
+#                     'lmbda': lmbda.to('cpu'),
+#                     't0': t0,
+#                     'n': self.n,
+#                     'ii': self.ii.to('cpu'),
+#                     'jj': self.jj.to('cpu'),
+#                     'kk': self.kk.to('cpu'),
+#                 }
+#
+#                 class Container(torch.nn.Module):
+#                     def __init__(self, my_values):
+#                         super().__init__()
+#                         for key in my_values:
+#                             setattr(self, key, my_values[key])
+#
+# # Save arbitrary values supported by TorchScript
+# # https://pytorch.org/docs/master/jit.html#supported-type
+#                 container = torch.jit.script(Container(my_values))
+#                 container.save("container.pt")
 
                 fastba.BA(self.poses, self.patches, self.intrinsics, 
                     target, weight, lmbda, self.ii, self.jj, self.kk, t0, self.n, 2)
@@ -530,8 +588,14 @@ class DPVO:
         if (self.n+1) >= self.N:
             raise Exception(f'The buffer size is too small. You can increase it using "--buffer {self.N*2}"')
 
+        # on recupere que la gauche pour tester
+
+
         if self.viewer is not None:
-            self.viewer.update_image(image)
+            if self.stereo:
+                self.viewer.update_image(image[0])
+            else:
+                self.viewer.update_image(image)
 
         # normalisation image avant patchifier
         image = 2 * (image[None,None] / 255.0) - 0.5
@@ -539,12 +603,25 @@ class DPVO:
         # recuperer disp pour patchify
 
         with autocast(enabled=self.cfg.MIXED_PRECISION):
-            fmap, gmap, imap, patches, _, clr = \
-                self.network.patchify(  image,
-                                        disp,
-                                        patches_per_image=self.cfg.PATCHES_PER_FRAME, 
-                                        gradient_bias=self.cfg.GRADIENT_BIAS, 
-                                        return_color=True)
+
+            if self.stereo:
+                fmap, gmap, imap, patches, _, clr, fmap_right = \
+                    self.network.patchify(  image,
+                                            disp,
+                                            patches_per_image=self.cfg.PATCHES_PER_FRAME, 
+                                            gradient_bias=self.cfg.GRADIENT_BIAS, 
+                                            return_color=True,
+                                            stereo=self.stereo)
+            else:
+                fmap, gmap, imap, patches, _, clr = \
+                    self.network.patchify(  image,
+                                            disp,
+                                            patches_per_image=self.cfg.PATCHES_PER_FRAME, 
+                                            gradient_bias=self.cfg.GRADIENT_BIAS, 
+                                            return_color=True)
+
+
+
 
         """ patchifier done """
         if DEBUG: import pdb; pdb.set_trace()
@@ -594,8 +671,15 @@ class DPVO:
         # on utilise self.mem pour reecrir par dessus les donnees au dela de self.mem
         self.imap_[self.n % self.mem] = imap.squeeze()
         self.gmap_[self.n % self.mem] = gmap.squeeze()
+        # pyramid gauche
         self.fmap1_[:, self.n % self.mem] = F.avg_pool2d(fmap[0], 1, 1)
         self.fmap2_[:, self.n % self.mem] = F.avg_pool2d(fmap[0], 4, 4)
+
+        # pyramid droite
+        if self.stereo:
+            self.fmap1_right[:, self.n % self.mem] = F.avg_pool2d(fmap_right[0], 1, 1)
+            self.fmap2_right[:, self.n % self.mem] = F.avg_pool2d(fmap_right[0], 4, 4)
+
 
         self.counter += 1        
         if self.n > 0 and not self.is_initialized:

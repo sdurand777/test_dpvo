@@ -169,15 +169,23 @@ class Patchifier(nn.Module):
         return new_image
 
     #def forward(self, images, patches_per_image=80, disps=None, gradient_bias=False, return_color=False):
-    def __call__(self, images, disps=None, patches_per_image=80, gradient_bias=False, return_color=False):
+    def __call__(self, images, disps=None, patches_per_image=80, gradient_bias=False, return_color=False, stereo=False):
 
         """ extract patches from input images """
         if DEBUG: import pdb; pdb.set_trace()
 
-        # extraction des features
-        fmap = self.fnet(images) / 4.0 # [1, 1; 128, 132, 240]
+        #import pdb; pdb.set_trace()
 
-        imap = self.inet(images) / 4.0 # {1, 1, 384; 132, 240}
+        # extraction des features
+        if stereo:
+            fmap = self.fnet(images[:,:,0]) / 4.0 # [1, 1; 128, 132, 240]
+            fmap_right = self.fnet(images[:,:,1]) / 4.0 # [1, 1; 128, 132, 240]
+            # only left context 
+            imap = self.inet(images[:,:,0]) / 4.0 # {1, 1, 384; 132, 240}
+        else:
+            fmap = self.fnet(images) / 4.0 # [1, 1; 128, 132, 240]
+            imap = self.inet(images) / 4.0 # {1, 1, 384; 132, 240}
+
 
         """ extract patches from input images """
         if DEBUG: import pdb; pdb.set_trace()
@@ -199,7 +207,11 @@ class Patchifier(nn.Module):
 
         if return_color:
             # on multiplie par 4 pour recuperer les valeurs de couleur direct sur l'image pleine taille
-            clr = altcorr.patchify(images[0], 4*(coords + 0.5), 0).view(b, -1, 3)
+            if stereo:
+                # color only on left
+                clr = altcorr.patchify(images[0,:,0], 4*(coords + 0.5), 0).view(b, -1, 3)
+            else:
+                clr = altcorr.patchify(images[0], 4*(coords + 0.5), 0).view(b, -1, 3)
 
         if DEBUG: import pdb; pdb.set_trace()
 
@@ -236,7 +248,10 @@ class Patchifier(nn.Module):
         if DEBUG: import pdb; pdb.set_trace()
 
         if return_color:
-            return fmap, gmap, imap, patches, index, clr
+            if stereo:
+                return fmap, gmap, imap, patches, index, clr, fmap_right
+            else:
+                return fmap, gmap, imap, patches, index, clr
 
         return fmap, gmap, imap, patches, index
 
