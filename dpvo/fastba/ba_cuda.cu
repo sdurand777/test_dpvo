@@ -233,7 +233,9 @@ __global__ void reprojection_residuals_and_hessian(
         torch::PackedTensorAccessor32<float,2,torch::RestrictPtrTraits> E,
         torch::PackedTensorAccessor32<float,1,torch::RestrictPtrTraits> C,
         torch::PackedTensorAccessor32<float,1,torch::RestrictPtrTraits> v,
-        torch::PackedTensorAccessor32<float,1,torch::RestrictPtrTraits> u, const int t0)
+        torch::PackedTensorAccessor32<float,1,torch::RestrictPtrTraits> u, 
+        const int t0,
+        const bool stereo)
 {
 
     // get intrinsics
@@ -251,19 +253,15 @@ __global__ void reprojection_residuals_and_hessian(
     GPU_1D_KERNEL_LOOP(n, ii.size(0)) {
         // patch id
         int k = ku[n];
-        // frame ii id
+        // frame ii id source
         int ix = ii[n];
-        // frame jj id
+        // frame jj id target
         int jx = jj[n];
         // indice patch
         int kx = kk[n];
 
-        // get pose from frame i and j
-        float ti[3] = { poses[ix][0], poses[ix][1], poses[ix][2] };
-        float tj[3] = { poses[jx][0], poses[jx][1], poses[jx][2] };
-        float qi[4] = { poses[ix][3], poses[ix][4], poses[ix][5], poses[ix][6] };
-        float qj[4] = { poses[jx][3], poses[jx][4], poses[jx][5], poses[jx][6] };
-
+        // relative pose 
+        float tij[3], qij[4];
         // get 3D point for frame i based on disparity of the patches
         float Xi[4], Xj[4];
         Xi[0] = (patches[kx][0][1][1] - cx) / fx;
@@ -271,9 +269,30 @@ __global__ void reprojection_residuals_and_hessian(
         Xi[2] = 1.0;
         Xi[3] = patches[kx][2][1][1];
 
-        // compute relative transformation
-        float tij[3], qij[4];
-        relSE3(ti, qi, tj, qj, tij, qij);
+        // RELATIVE TRANSFO FRAME I TO J
+        // stereo frames same id
+        if (ix == jx && stereo) 
+        {
+                tij[0] =  -0.1;
+                tij[1] =     0;
+                tij[2] =     0;
+                qij[0] =     0;
+                qij[1] =     0;
+                qij[2] =     0;
+                qij[3] =     1;
+        }
+        else 
+        {
+            // get pose from frame i and j
+            float ti[3] = { poses[ix][0], poses[ix][1], poses[ix][2] };
+            float tj[3] = { poses[jx][0], poses[jx][1], poses[jx][2] };
+            float qi[4] = { poses[ix][3], poses[ix][4], poses[ix][5], poses[ix][6] };
+            float qj[4] = { poses[jx][3], poses[jx][4], poses[jx][5], poses[jx][6] };
+
+            // compute relative transformation
+            relSE3(ti, qi, tj, qj, tij, qij);
+
+        }
 
         // apply transfo to get 3D point in frame j
         actSE3(tij, qij, Xi, Xj);
@@ -480,7 +499,10 @@ std::vector<torch::Tensor> cuda_ba(
         torch::Tensor ii,
         torch::Tensor jj, 
         torch::Tensor kk,
-        const int t0, const int t1, const int iterations)
+        const int t0, 
+        const int t1, 
+        const int iterations,
+        const bool stereo)
 {
 
     // recupereation des ids des patches uniques
@@ -551,7 +573,9 @@ std::vector<torch::Tensor> cuda_ba(
                 E.packed_accessor32<float,2,torch::RestrictPtrTraits>(),
                 C.packed_accessor32<float,1,torch::RestrictPtrTraits>(),
                 v.packed_accessor32<float,1,torch::RestrictPtrTraits>(),
-                u.packed_accessor32<float,1,torch::RestrictPtrTraits>(), t0);
+                u.packed_accessor32<float,1,torch::RestrictPtrTraits>(), 
+                t0,
+                stereo);
 
         v = v.view({6*N, 1});
         u = u.view({1*M, 1});

@@ -277,10 +277,32 @@ class DPVO:
             jj1 = jj % (self.mem)
             kk1 = kk % (self.M * self.mem)
 
-            corr1 = altcorr.corr(self.gmap, self.pyramid[0], coords / 1, kk1, jj1, 3)
+            #import pdb; pdb.set_trace()
+
+            corr1 = altcorr.corr_stereo(
+                                        self.gmap, 
+                                        self.pyramid[0], 
+                                        self.pyramid_right[0], 
+                                        coords / 1, 
+                                        ii1, 
+                                        jj1, 
+                                        kk1, 
+                                        3)
+            corr1 = corr1[0]
             # level 2 divise par 4
             # corr2 shape [1, 96, 7 ,7, 3, 3]
-            corr2 = altcorr.corr(self.gmap, self.pyramid[1], coords / 4, kk1, jj1, 3)
+            corr2 = altcorr.corr_stereo(
+                                        self.gmap, 
+                                        self.pyramid[1], 
+                                        self.pyramid_right[1], 
+                                        coords / 4, 
+                                        ii1, 
+                                        jj1, 
+                                        kk1, 
+                                        3)
+            corr2 = corr2[0]
+
+            #corr2 = altcorr.corr(self.gmap, self.pyramid[1], coords / 4, kk1, jj1, 3)
         else:
             # on recupere les indices
             ii, jj = indicies if indicies is not None else (self.kk, self.jj)
@@ -290,32 +312,28 @@ class DPVO:
             # indices de la frame sur laquelle reprojete les patches
             jj1 = jj % (self.mem)
 
-            # recuperer les data entrees pour rejouer correlation
-            if len(ii) == 6144:
-                my_values = {
-                    'gmap': self.gmap.to('cpu'),
-                    'pyramid': self.pyramid[0].to('cpu'),
-                    'coords': coords.to('cpu'),
-                    'kk1': ii1.to('cpu'),
-                    'jj1': jj1.to('cpu'),
-                }
-
-                class Container(torch.nn.Module):
-                    def __init__(self, my_values):
-                        super().__init__()
-                        for key in my_values:
-                            setattr(self, key, my_values[key])
-
-# Save arbitrary values supported by TorchScript
-# https://pytorch.org/docs/master/jit.html#supported-type
-                container = torch.jit.script(Container(my_values))
-                container.save("container_corr_dpvo.pt")
-
-                import pdb; pdb.set_trace()
-
-
-
-
+#             # recuperer les data entrees pour rejouer correlation
+#             if len(ii) == 6144:
+#                 my_values = {
+#                     'gmap': self.gmap.to('cpu'),
+#                     'pyramid': self.pyramid[0].to('cpu'),
+#                     'coords': coords.to('cpu'),
+#                     'kk1': ii1.to('cpu'),
+#                     'jj1': jj1.to('cpu'),
+#                 }
+#
+#                 class Container(torch.nn.Module):
+#                     def __init__(self, my_values):
+#                         super().__init__()
+#                         for key in my_values:
+#                             setattr(self, key, my_values[key])
+#
+# # Save arbitrary values supported by TorchScript
+# # https://pytorch.org/docs/master/jit.html#supported-type
+#                 container = torch.jit.script(Container(my_values))
+#                 container.save("container_corr_dpvo.pt")
+#
+#                 import pdb; pdb.set_trace()
 
             # on recupere directement les correlations dans la pyramide
             # level 1 pleine taille 132 240
@@ -413,7 +431,7 @@ class DPVO:
 
     def keyframe(self):
 
-        import pdb; pdb.set_trace()
+        #import pdb; pdb.set_trace()
 
         # KEYFRAME INDEX set to 4 on regarde les frames proches
         i = self.n - self.cfg.KEYFRAME_INDEX - 1 # KF - 5
@@ -476,13 +494,13 @@ class DPVO:
         with Timer("other", enabled=self.enable_timing):
             # calculer toutes les reprojection pour le graph
             # coords shape [1, 6144, 2, 3, 3]
-            #coords = self.reproject(stereo=self.stereo)
-            coords = self.reproject()
+            coords = self.reproject(stereo=self.stereo)
+            #coords = self.reproject()
 
             with autocast(enabled=True):
                 # gestion du cas stereo
-                #corr = self.corr(coords, stereo=self.stereo)
-                corr = self.corr(coords)
+                corr = self.corr(coords, stereo=self.stereo)
+                #corr = self.corr(coords)
 
                 # uniquement context de gauche pour rappel
                 ctx = self.imap[:,self.kk % (self.M * self.mem)]
@@ -531,7 +549,7 @@ class DPVO:
 #                 container.save("container.pt")
 
                 fastba.BA(self.poses, self.patches, self.intrinsics, 
-                    target, weight, lmbda, self.ii, self.jj, self.kk, t0, self.n, 2)
+                    target, weight, lmbda, self.ii, self.jj, self.kk, t0, self.n, 2, self.stereo)
             except:
                 print("Warning BA failed...")
             
@@ -594,12 +612,15 @@ class DPVO:
         if self.viewer is not None:
             if self.stereo:
                 self.viewer.update_image(image[0])
+                # normalisation image avant patchifier
+                image = 2 * (image[None,None] / 255.0) - 0.5
             else:
                 self.viewer.update_image(image)
+                # normalisation image avant patchifier
+                image = 2 * (image[None] / 255.0) - 0.5
 
-        # normalisation image avant patchifier
-        image = 2 * (image[None,None] / 255.0) - 0.5
-        
+
+       
         # recuperer disp pour patchify
 
         with autocast(enabled=self.cfg.MIXED_PRECISION):

@@ -78,3 +78,26 @@ def corr(fmap1, fmap2, coords, ii, jj, radius=1, dropout=1):
     return CorrLayer.apply(fmap1, fmap2, coords, ii, jj, radius, dropout)
 
 
+def corr_stereo(
+                fmap1, 
+                fmap2, 
+                fmap2_right, 
+                coords, 
+                ii, 
+                jj, 
+                kk, 
+                radius=1):
+    return cuda_corr.corr_stereo(
+                                    fmap1, 
+                                    fmap2, 
+                                    fmap2_right, 
+                                    coords, 
+                                    ii, 
+                                    jj, 
+                                    kk,
+                                    radius)
+
+
+
+
+

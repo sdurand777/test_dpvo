@@ -140,6 +140,92 @@ __global__ void corr_forward_kernel(int R,
 }
 
 
+
+// method pour correlation entre les patches et les level de la pyramid fmap1 feature map patchify et fmap2 level de la pyramid
+template <typename scalar_t>
+__global__ void corr_stereo_kernel(int R,
+    const torch::PackedTensorAccessor32<scalar_t,5,torch::RestrictPtrTraits> fmap1,
+    const torch::PackedTensorAccessor32<scalar_t,5,torch::RestrictPtrTraits> fmap2,
+    const torch::PackedTensorAccessor32<scalar_t,5,torch::RestrictPtrTraits> fmap2_right,
+    const torch::PackedTensorAccessor32<float,5,torch::RestrictPtrTraits> coords,
+    const torch::PackedTensorAccessor32<long,1,torch::RestrictPtrTraits> us, // ii
+    const torch::PackedTensorAccessor32<long,1,torch::RestrictPtrTraits> vs, // jj
+    const torch::PackedTensorAccessor32<long,1,torch::RestrictPtrTraits> ws, // kk
+    torch::PackedTensorAccessor32<scalar_t,6,torch::RestrictPtrTraits> corr)
+{
+  // diameter
+  const int D = 2*R + 2;
+
+  const int B = coords.size(0);
+  const int M = coords.size(1);
+  const int H = coords.size(3);
+  const int W = coords.size(4);
+
+  const int C = fmap1.size(2);
+  const int H2 = fmap2.size(3);
+  const int W2 = fmap2.size(4);
+
+  int n = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if (n < B * M * H * W * D * D) {
+    const int jj = n % D; n /= D;
+    const int ii = n % D; n /= D;
+    const int j0 = n % W; n /= W;
+    const int i0 = n % H; n /= H;
+    const int  m = n % M; n /= M;
+
+    // indice patch
+    const int kx = ws[m];
+    // indice frame cible 
+    const int jx = vs[m];
+    // indice frame source
+    const int ix = us[m];
+
+    const float x = coords[n][m][0][i0][j0];
+    const float y = coords[n][m][1][i0][j0];
+
+    const int i1 = static_cast<int>(floor(y)) + (ii - R);
+    const int j1 = static_cast<int>(floor(x)) + (jj - R);
+
+    scalar_t s = 0;
+    if (within_bounds(i1, j1, H2, W2)) {
+
+      #pragma unroll 8
+      for (int i=0; i<C; i+=8) {
+        scalar_t f1[8]; for (int j=0; j<8; j++) f1[j] = fmap1[n][kx][i+j][i0][j0];
+        scalar_t f2[8]; 
+        if (ix == jx)
+        {
+            for (int j=0; j<8; j++) f2[j] = fmap2_right[n][jx][i+j][i1][j1];
+        }
+        else
+        {
+            for (int j=0; j<8; j++) f2[j] = fmap2[n][jx][i+j][i1][j1];
+        }
+
+        #pragma unroll
+        for (int j=0; j<8; j++) s += f1[j] * f2[j];
+      }
+    }
+
+    corr[n][m][ii][jj][i0][j0] = s;
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 template <typename scalar_t>
 __global__ void corr_backward_kernel(int R,
     const torch::PackedTensorAccessor32<scalar_t,5,torch::RestrictPtrTraits> fmap1,
@@ -236,6 +322,68 @@ std::vector<torch::Tensor> corr_cuda_forward(
 
   return { out.permute({0,1,3,2,4,5}) };
 }
+
+
+std::vector<torch::Tensor> corr_stereo_cuda(
+  torch::Tensor fmap1,
+  torch::Tensor fmap2,
+  torch::Tensor fmap2_right,
+  torch::Tensor coords,
+  torch::Tensor ii,
+  torch::Tensor jj,
+  torch::Tensor kk,
+  int radius)
+{
+  const int B = coords.size(0);
+  const int M = coords.size(1);
+
+  const int H = coords.size(3);
+  const int W = coords.size(4);
+  const int D = 2 * radius + 2;
+
+  auto opts = fmap1.options();
+  auto corr = torch::empty({B, M, D, D, H, W}, opts);
+
+  AT_DISPATCH_FLOATING_TYPES_AND_HALF(fmap1.type(), "corr_stereo_kernel", ([&] {
+      corr_stereo_kernel<scalar_t><<<BLOCKS(B * M * H * W * D * D), THREADS>>>(radius,
+        fmap1.packed_accessor32<scalar_t,5,torch::RestrictPtrTraits>(),
+        fmap2.packed_accessor32<scalar_t,5,torch::RestrictPtrTraits>(),
+        fmap2_right.packed_accessor32<scalar_t,5,torch::RestrictPtrTraits>(),
+        coords.packed_accessor32<float,5,torch::RestrictPtrTraits>(),
+        ii.packed_accessor32<long,1,torch::RestrictPtrTraits>(),
+        jj.packed_accessor32<long,1,torch::RestrictPtrTraits>(),
+        kk.packed_accessor32<long,1,torch::RestrictPtrTraits>(),
+        corr.packed_accessor32<scalar_t,6,torch::RestrictPtrTraits>());
+  }));
+
+  torch::Tensor x = coords.index({Slice(), Slice(), 0, None, None});
+  torch::Tensor y = coords.index({Slice(), Slice(), 1, None, None});
+  torch::Tensor dx = x - x.floor(); dx = dx.to(fmap1.dtype());
+  torch::Tensor dy = y - y.floor(); dy = dy.to(fmap2.dtype());
+
+  // bilinear interpolation
+  torch::Tensor out;
+  out  = (1 - dx) * (1 - dy) * corr.index({Slice(), Slice(), Slice(0, D-1), Slice(0, D-1)});
+  out +=     (dx) * (1 - dy) * corr.index({Slice(), Slice(), Slice(0, D-1), Slice(1, D-0)});
+  out += (1 - dx) *     (dy) * corr.index({Slice(), Slice(), Slice(1, D-0), Slice(0, D-1)});
+  out +=     (dx) *     (dy) * corr.index({Slice(), Slice(), Slice(1, D-0), Slice(1, D-0)});
+
+  return { out.permute({0,1,3,2,4,5}) };
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 std::vector<torch::Tensor> corr_cuda_backward(
