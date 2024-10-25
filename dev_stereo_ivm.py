@@ -46,6 +46,10 @@ def run(cfg, network, imagedir, calib, stride=0, skip=0, viz=False, timeit=False
         print("image t : ", t)
 
         if t < 0: break
+    
+        # if STEREO:
+        #     if t > 700: break
+        # else:
         if t > 430: break
 
         
@@ -87,12 +91,12 @@ def run(cfg, network, imagedir, calib, stride=0, skip=0, viz=False, timeit=False
     ply_data = PlyData([el], text=True)
     ply_data.write("output_test_stereo.ply")
 
-    time.sleep(30)
+    time.sleep(60)
 
 
-    for _ in range(12):
-        print("GLOBAL IT")
-        slam.update()
+    # for _ in range(12):
+    #     print("GLOBAL IT")
+    #     slam.update()
 
 
 
@@ -117,7 +121,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--network', type=str, default='/home/smith/test_dpvo/dpvo.pth')
-    parser.add_argument('--imagedir', type=str)
+    parser.add_argument('--imagedir', type=str, default='/home/smith/test_pipe/')
     parser.add_argument('--calib', type=str)
     parser.add_argument('--stride', type=int, default=1)
     parser.add_argument('--skip', type=int, default=0)
