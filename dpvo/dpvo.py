@@ -563,7 +563,7 @@ class DPVO:
                 fastba.BA(self.poses, self.patches, self.intrinsics, 
                     target, weight, lmbda, self.ii, self.jj, self.kk, t0, self.n, 2)
 
-                import pdb; pdb.set_trace()
+                #import pdb; pdb.set_trace()
 
             except:
                 print("Warning BA failed...")
@@ -627,44 +627,45 @@ class DPVO:
         if self.viewer is not None:
             if self.stereo:
                 self.viewer.update_image(image[0])
-                # normalisation image avant patchifier
-                image = 2 * (image[None,None] / 255.0) - 0.5
             else:
                 self.viewer.update_image(image)
-                # normalisation image avant patchifier
-                image = 2 * (image[None] / 255.0) - 0.5
 
 
-       
+        # post traitement image
+        if self.stereo:
+            # normalisation image avant patchifier
+            image = 2 * (image[None,None] / 255.0) - 0.5
+        else:
+            # normalisation image avant patchifier
+            image = 2 * (image[None] / 255.0) - 0.5
+
         # recuperer disp pour patchify
-
         with autocast(enabled=self.cfg.MIXED_PRECISION):
 
             if self.stereo:
-                # fmap, gmap, imap, patches, _, clr, fmap_right = \
-                #     self.network.patchify(  image,
+                # recuperer info image gauche
+                #import pdb; pdb.set_trace()
+                fmap, gmap, imap, patches, _, clr, fmap_right = \
+                        self.network.patchify(image,
+                                            disp,
+                                            patches_per_image=self.cfg.PATCHES_PER_FRAME, 
+                                            gradient_bias=self.cfg.GRADIENT_BIAS, 
+                                            return_color=True,
+                                            stereo=self.stereo)
+
+                #import pdb; pdb.set_trace()
+
+                # # recuperer info image droite
+                # fmap_right, gmap_right, imap_right, patches_right, _, clr_right = \
+                #         self.network.patchify(  image[:,:,1],
                 #                             disp,
                 #                             patches_per_image=self.cfg.PATCHES_PER_FRAME, 
                 #                             gradient_bias=self.cfg.GRADIENT_BIAS, 
                 #                             return_color=True,
                 #                             stereo=self.stereo)
-                fmap_left, gmap_left, imap_left, patches_left, _, clr_left = \
-                        self.network.patchify(  image[:,:,0],
-                                            disp,
-                                            patches_per_image=self.cfg.PATCHES_PER_FRAME, 
-                                            gradient_bias=self.cfg.GRADIENT_BIAS, 
-                                            return_color=True,
-                                            stereo=self.stereo)
-
-                fmap_right, gmap_right, imap_right, patches_right, _, clr_right = \
-                        self.network.patchify(  image[:,:,1],
-                                            disp,
-                                            patches_per_image=self.cfg.PATCHES_PER_FRAME, 
-                                            gradient_bias=self.cfg.GRADIENT_BIAS, 
-                                            return_color=True,
-                                            stereo=self.stereo)
 
             else:
+                # info image system monoculaire
                 fmap, gmap, imap, patches, _, clr = \
                     self.network.patchify(  image,
                                             disp,
@@ -678,232 +679,235 @@ class DPVO:
         """ patchifier done """
         if DEBUG: import pdb; pdb.set_trace()
 
+        # if self.stereo:
+        #     ### update state attributes ###
+        #     tstamp = tstamp*2
+        #     # left
+        #     self.tlist.append(tstamp)
+        #     # right
+        #     self.tlist.append(tstamp+1)
+        #
+        #     # left
+        #     self.tstamps_[self.n] = self.counter
+        #     # right
+        #     self.tstamps_[self.n+1] = self.counter+1
+        #
+        #     # left
+        #     self.intrinsics_[self.n] = intrinsics / self.RES
+        #     # right
+        #     self.intrinsics_[self.n+1] = intrinsics / self.RES
+        #
+        #     # color info for visualization
+        #     clr_left = (clr_left[0,:,[2,1,0]] + 0.5) * (255.0 / 2)
+        #     clr_right = (clr_right[0,:,[2,1,0]] + 0.5) * (255.0 / 2)
+        #     # left
+        #     self.colors_[self.n] = clr_left.to(torch.uint8)
+        #     self.colors_[self.n+1] = clr_right.to(torch.uint8)
+        #
+        #     # index nombre de frames
+        #     # left
+        #     self.index_[self.n + 1] = self.n + 1
+        #     # right
+        #     self.index_[self.n + 2] = self.n + 2
+        #     # index nombre de patches
+        #     # left
+        #     self.index_map_[self.n + 1] = self.m + self.M
+        #     # right
+        #     self.index_map_[self.n + 2] = self.m + self.M + self.M
+        #
+        #     # pour stereo
+        #     if self.n >= 4:
+        #         if self.cfg.MOTION_MODEL == 'DAMPED_LINEAR':
+        #             # left previous
+        #             P1 = SE3(self.poses_[self.n-2])
+        #             # left two previous
+        #             P2 = SE3(self.poses_[self.n-4])
+        #             
+        #             # calcul dans la lie algebra du deplacement relatif
+        #             xi = self.cfg.MOTION_DAMPING * (P1 * P2.inv()).log()
+        #             # retractation sur SE3  sur la frame n - 1
+        #             tvec_qvec = (SE3.exp(xi) * P1).data
+        #             # initialise pose actuelle avec tvec_qvec
+        #             # left
+        #             #import pdb; pdb.set_trace()
+        #             self.poses_[self.n] = tvec_qvec
+        #             # right add transfo between left and right ?
+        #             self.poses_[self.n+1] = tvec_qvec
+        #         else:
+        #             # get previous left pose
+        #             tvec_qvec = self.poses[self.n-2]
+        #             # left
+        #             self.poses_[self.n] = tvec_qvec
+        #             # right
+        #             self.poses_[self.n+1] = tvec_qvec
+        #
+        #
+        #     # So after initialization no more depth info used from patches
+        #
+        #     # TODO better depth initialization
+        #     # left
+        #     patches_left[:,:,2] = torch.rand_like(patches_left[:,:,2,0,0,None,None])
+        #     if self.is_initialized:
+        #         s = torch.median(self.patches_[self.n-6:self.n:2,:,2])
+        #         patches_left[:,:,2] = s
+        #     # right
+        #     patches_right[:,:,2] = torch.rand_like(patches_right[:,:,2,0,0,None,None])
+        #     if self.is_initialized:
+        #         s = torch.median(self.patches_[self.n-5:self.n+1:2,:,2])
+        #         patches_right[:,:,2] = s
+        #
+        #
+        #     self.patches_[self.n] = patches_left
+        #     self.patches_[self.n+1] = patches_right
+        #
+        #     ### update network attributes ###
+        #     # on utilise self.mem pour reecrir par dessus les donnees au dela de self.mem
+        #     self.imap_[self.n % self.mem] = imap_left.squeeze()
+        #     self.gmap_[self.n % self.mem] = gmap_left.squeeze()
+        #     # pyramid gauche
+        #     self.fmap1_[:, self.n % self.mem] = F.avg_pool2d(fmap_left[0], 1, 1)
+        #     self.fmap2_[:, self.n % self.mem] = F.avg_pool2d(fmap_left[0], 4, 4)
+        #
+        #
+        #     print("self.n + 1 : ", self.n + 1)
+        #     print("self.mem : ",self.mem)
+        #     self.imap_[(self.n+1) % self.mem] = imap_right.squeeze()
+        #     self.gmap_[(self.n+1) % self.mem] = gmap_right.squeeze()
+        #     # pyramid gauche
+        #     self.fmap1_[:, (self.n+1) % self.mem] = F.avg_pool2d(fmap_right[0], 1, 1)
+        #     self.fmap2_[:, (self.n+1) % self.mem] = F.avg_pool2d(fmap_right[0], 4, 4)
+        #
+        #     self.counter += 1        
+        #     if self.n > 0 and not self.is_initialized:
+        #         if self.motion_probe(stereo=self.stereo) < 2.0:
+        #             # on garde les poses pour reconstituer toute la trajectoire
+        #             self.delta[self.counter - 1] = (self.counter - 2, Id[0])
+        #             return
+        #
+        #     self.n += 1
+        #     self.m += self.M
+        #
+        #     # edges patches passes vers frame actuel
+        #     self.append_factors(*self.__edges_forw())
+        #
+        #     # edges patches actuels vers frames passes et actuels
+        #     self.append_factors(*self.__edges_back())
+        #
+        #     self.n += 1
+        #     self.m += self.M
+        #
+        #     # edges patches passes vers frame actuel
+        #     self.append_factors(*self.__edges_forw())
+        #
+        #     # edges patches actuels vers frames passes et actuels
+        #     self.append_factors(*self.__edges_back())
+        #
+        #     # initialisation
+        #     if self.n == 8 and not self.is_initialized:
+        #         self.is_initialized = True            
+        #
+        #         #import pdb; pdb.set_trace()
+        #
+        #         # 12 iterations update
+        #         for itr in range(12):
+        #             self.update()
+        #     
+        #     # classic update
+        #     elif self.is_initialized:
+        #         self.update()
+        #         self.keyframe()
+        #
+        # else:
+
+        ### update state attributes ###
+        self.tlist.append(tstamp)
+        self.tstamps_[self.n] = self.counter
+        self.intrinsics_[self.n] = intrinsics / self.RES
+
+        # color info for visualization
+        clr = (clr[0,:,[2,1,0]] + 0.5) * (255.0 / 2)
+        self.colors_[self.n] = clr.to(torch.uint8)
+
+        # index nombre de frames
+        self.index_[self.n + 1] = self.n + 1
+        # index nombre de patches
+        self.index_map_[self.n + 1] = self.m + self.M
+
+        if self.n > 1:
+            if self.cfg.MOTION_MODEL == 'DAMPED_LINEAR':
+                P1 = SE3(self.poses_[self.n-1])
+                P2 = SE3(self.poses_[self.n-2])
+                
+                # calcul dans la lie algebra du deplacement relatif
+                xi = self.cfg.MOTION_DAMPING * (P1 * P2.inv()).log()
+                # retractation sur SE3  sur la frame n - 1
+                tvec_qvec = (SE3.exp(xi) * P1).data
+                # initialise pose actuelle avec tvec_qvec
+                self.poses_[self.n] = tvec_qvec
+            else:
+                tvec_qvec = self.poses[self.n-1]
+                self.poses_[self.n] = tvec_qvec
+
+
+        # Utiliser la stereo pour initialiser la depth mieux et des le debut
+
+
+        # TODO better depth initialization
+        patches[:,:,2] = torch.rand_like(patches[:,:,2,0,0,None,None])
+        if self.is_initialized:
+            s = torch.median(self.patches_[self.n-3:self.n,:,2])
+            patches[:,:,2] = s
+
+        self.patches_[self.n] = patches
+
+        ### update network attributes ###
+        # on utilise self.mem pour reecrir par dessus les donnees au dela de self.mem
+        self.imap_[self.n % self.mem] = imap.squeeze()
+        self.gmap_[self.n % self.mem] = gmap.squeeze()
+
+        # pyramid gauche
+        self.fmap1_[:, self.n % self.mem] = F.avg_pool2d(fmap[0], 1, 1)
+        self.fmap2_[:, self.n % self.mem] = F.avg_pool2d(fmap[0], 4, 4)
+
+        # pyramid droite
         if self.stereo:
-            ### update state attributes ###
-            tstamp = tstamp*2
-            # left
-            self.tlist.append(tstamp)
-            # right
-            self.tlist.append(tstamp+1)
+            self.fmap1_right[:, self.n % self.mem] = F.avg_pool2d(fmap_right[0], 1, 1)
+            self.fmap2_right[:, self.n % self.mem] = F.avg_pool2d(fmap_right[0], 4, 4)
 
-            # left
-            self.tstamps_[self.n] = self.counter
-            # right
-            self.tstamps_[self.n+1] = self.counter+1
+        self.counter += 1        
+        if self.n > 0 and not self.is_initialized:
+            if self.motion_probe() < 2.0:
+                # on garde les poses pour reconstituer toute la trajectoire
+                self.delta[self.counter - 1] = (self.counter - 2, Id[0])
+                return
 
-            # left
-            self.intrinsics_[self.n] = intrinsics / self.RES
-            # right
-            self.intrinsics_[self.n+1] = intrinsics / self.RES
+        self.n += 1
+        self.m += self.M
 
-            # color info for visualization
-            clr_left = (clr_left[0,:,[2,1,0]] + 0.5) * (255.0 / 2)
-            clr_right = (clr_right[0,:,[2,1,0]] + 0.5) * (255.0 / 2)
-            # left
-            self.colors_[self.n] = clr_left.to(torch.uint8)
-            self.colors_[self.n+1] = clr_right.to(torch.uint8)
+        #import pdb; pdb.set_trace()
 
-            # index nombre de frames
-            # left
-            self.index_[self.n + 1] = self.n + 1
-            # right
-            self.index_[self.n + 2] = self.n + 2
-            # index nombre de patches
-            # left
-            self.index_map_[self.n + 1] = self.m + self.M
-            # right
-            self.index_map_[self.n + 2] = self.m + self.M + self.M
+        # relative pose
+        # edges patches passes vers frame actuel
+        self.append_factors(*self.__edges_forw())
 
-            # pour stereo
-            if self.n >= 4:
-                if self.cfg.MOTION_MODEL == 'DAMPED_LINEAR':
-                    # left previous
-                    P1 = SE3(self.poses_[self.n-2])
-                    # left two previous
-                    P2 = SE3(self.poses_[self.n-4])
-                    
-                    # calcul dans la lie algebra du deplacement relatif
-                    xi = self.cfg.MOTION_DAMPING * (P1 * P2.inv()).log()
-                    # retractation sur SE3  sur la frame n - 1
-                    tvec_qvec = (SE3.exp(xi) * P1).data
-                    # initialise pose actuelle avec tvec_qvec
-                    # left
-                    #import pdb; pdb.set_trace()
-                    self.poses_[self.n] = tvec_qvec
-                    # right add transfo between left and right ?
-                    self.poses_[self.n+1] = tvec_qvec
-                else:
-                    # get previous left pose
-                    tvec_qvec = self.poses[self.n-2]
-                    # left
-                    self.poses_[self.n] = tvec_qvec
-                    # right
-                    self.poses_[self.n+1] = tvec_qvec
+        # edges patches actuels vers frames passes et actuels
+        self.append_factors(*self.__edges_back())
 
 
-            # So after initialization no more depth info used from patches
-
-            # TODO better depth initialization
-            # left
-            patches_left[:,:,2] = torch.rand_like(patches_left[:,:,2,0,0,None,None])
-            if self.is_initialized:
-                s = torch.median(self.patches_[self.n-6:self.n:2,:,2])
-                patches_left[:,:,2] = s
-            # right
-            patches_right[:,:,2] = torch.rand_like(patches_right[:,:,2,0,0,None,None])
-            if self.is_initialized:
-                s = torch.median(self.patches_[self.n-5:self.n+1:2,:,2])
-                patches_right[:,:,2] = s
-
-
-            self.patches_[self.n] = patches_left
-            self.patches_[self.n+1] = patches_right
-
-            ### update network attributes ###
-            # on utilise self.mem pour reecrir par dessus les donnees au dela de self.mem
-            self.imap_[self.n % self.mem] = imap_left.squeeze()
-            self.gmap_[self.n % self.mem] = gmap_left.squeeze()
-            # pyramid gauche
-            self.fmap1_[:, self.n % self.mem] = F.avg_pool2d(fmap_left[0], 1, 1)
-            self.fmap2_[:, self.n % self.mem] = F.avg_pool2d(fmap_left[0], 4, 4)
-
-
-            print("self.n + 1 : ", self.n + 1)
-            print("self.mem : ",self.mem)
-            self.imap_[(self.n+1) % self.mem] = imap_right.squeeze()
-            self.gmap_[(self.n+1) % self.mem] = gmap_right.squeeze()
-            # pyramid gauche
-            self.fmap1_[:, (self.n+1) % self.mem] = F.avg_pool2d(fmap_right[0], 1, 1)
-            self.fmap2_[:, (self.n+1) % self.mem] = F.avg_pool2d(fmap_right[0], 4, 4)
-
-            self.counter += 1        
-            if self.n > 0 and not self.is_initialized:
-                if self.motion_probe(stereo=self.stereo) < 2.0:
-                    # on garde les poses pour reconstituer toute la trajectoire
-                    self.delta[self.counter - 1] = (self.counter - 2, Id[0])
-                    return
-
-            self.n += 1
-            self.m += self.M
-
-            # edges patches passes vers frame actuel
-            self.append_factors(*self.__edges_forw())
-
-            # edges patches actuels vers frames passes et actuels
-            self.append_factors(*self.__edges_back())
-
-            self.n += 1
-            self.m += self.M
-
-            # edges patches passes vers frame actuel
-            self.append_factors(*self.__edges_forw())
-
-            # edges patches actuels vers frames passes et actuels
-            self.append_factors(*self.__edges_back())
-
-            # initialisation
-            if self.n == 8 and not self.is_initialized:
-                self.is_initialized = True            
-
-                #import pdb; pdb.set_trace()
-
-                # 12 iterations update
-                for itr in range(12):
-                    self.update()
-            
-            # classic update
-            elif self.is_initialized:
-                self.update()
-                self.keyframe()
-
-        else:
-            ### update state attributes ###
-            self.tlist.append(tstamp)
-            self.tstamps_[self.n] = self.counter
-            self.intrinsics_[self.n] = intrinsics / self.RES
-
-            # color info for visualization
-            clr = (clr[0,:,[2,1,0]] + 0.5) * (255.0 / 2)
-            self.colors_[self.n] = clr.to(torch.uint8)
-
-            # index nombre de frames
-            self.index_[self.n + 1] = self.n + 1
-            # index nombre de patches
-            self.index_map_[self.n + 1] = self.m + self.M
-
-            if self.n > 1:
-                if self.cfg.MOTION_MODEL == 'DAMPED_LINEAR':
-                    P1 = SE3(self.poses_[self.n-1])
-                    P2 = SE3(self.poses_[self.n-2])
-                    
-                    # calcul dans la lie algebra du deplacement relatif
-                    xi = self.cfg.MOTION_DAMPING * (P1 * P2.inv()).log()
-                    # retractation sur SE3  sur la frame n - 1
-                    tvec_qvec = (SE3.exp(xi) * P1).data
-                    # initialise pose actuelle avec tvec_qvec
-                    self.poses_[self.n] = tvec_qvec
-                else:
-                    tvec_qvec = self.poses[self.n-1]
-                    self.poses_[self.n] = tvec_qvec
-
-
-            # So after initialization no more depth info used from patches
-
-            # TODO better depth initialization
-            patches[:,:,2] = torch.rand_like(patches[:,:,2,0,0,None,None])
-            if self.is_initialized:
-                s = torch.median(self.patches_[self.n-3:self.n,:,2])
-                patches[:,:,2] = s
-
-            self.patches_[self.n] = patches
-
-            ### update network attributes ###
-            # on utilise self.mem pour reecrir par dessus les donnees au dela de self.mem
-            self.imap_[self.n % self.mem] = imap.squeeze()
-            self.gmap_[self.n % self.mem] = gmap.squeeze()
-            # pyramid gauche
-            self.fmap1_[:, self.n % self.mem] = F.avg_pool2d(fmap[0], 1, 1)
-            self.fmap2_[:, self.n % self.mem] = F.avg_pool2d(fmap[0], 4, 4)
-
-            # # pyramid droite
-            # if self.stereo:
-            #     self.fmap1_right[:, self.n % self.mem] = F.avg_pool2d(fmap_right[0], 1, 1)
-            #     self.fmap2_right[:, self.n % self.mem] = F.avg_pool2d(fmap_right[0], 4, 4)
-
-            self.counter += 1        
-            if self.n > 0 and not self.is_initialized:
-                if self.motion_probe() < 2.0:
-                    # on garde les poses pour reconstituer toute la trajectoire
-                    self.delta[self.counter - 1] = (self.counter - 2, Id[0])
-                    return
-
-            self.n += 1
-            self.m += self.M
+        # initialisation
+        if self.n == 8 and not self.is_initialized:
+            self.is_initialized = True            
 
             #import pdb; pdb.set_trace()
 
-            # relative pose
-            # edges patches passes vers frame actuel
-            self.append_factors(*self.__edges_forw())
-
-            # edges patches actuels vers frames passes et actuels
-            self.append_factors(*self.__edges_back())
-
-
-            # initialisation
-            if self.n == 8 and not self.is_initialized:
-                self.is_initialized = True            
-
-                #import pdb; pdb.set_trace()
-
-                # 12 iterations update
-                for itr in range(12):
-                    self.update()
-            
-            # classic update
-            elif self.is_initialized:
+            # 12 iterations update
+            for itr in range(12):
                 self.update()
-                self.keyframe()
+        
+        # classic update
+        elif self.is_initialized:
+            self.update()
+            self.keyframe()
 
                 
 

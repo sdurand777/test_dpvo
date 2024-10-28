@@ -11,7 +11,7 @@ from plyfile import PlyElement, PlyData
 from dpvo.utils import Timer
 from dpvo.dpvo import DPVO
 from dpvo.config import cfg
-from dpvo.stream import image_stream, video_stream, image_stream_stereo, image_stream_stereo_ivm
+from dpvo.stream import image_stream, video_stream, image_stream_stereo, image_stream_depth_stereo_ivm
 from dpvo.plot_utils import plot_trajectory, save_trajectory_tum_format
 
 import time
@@ -37,11 +37,11 @@ def run(cfg, network, imagedir, calib, stride=0, skip=0, viz=False, timeit=False
     # else:
     #     reader = Process(target=video_stream, args=(queue, imagedir, calib, stride, skip))
 
-    reader = Process(target=image_stream_stereo_ivm, args=(queue, imagedir, calib, stride, skip))
+    reader = Process(target=image_stream_depth_stereo_ivm, args=(queue, imagedir, calib, stride, skip))
     reader.start()
 
     while 1:
-        (t, images, intrinsics) = queue.get()
+        (t, images, intrinsics, disps) = queue.get()
 
         print("image t : ", t)
 
@@ -56,6 +56,7 @@ def run(cfg, network, imagedir, calib, stride=0, skip=0, viz=False, timeit=False
         # mettre sur cuda 
         images = images.cuda()
         intrinsics = intrinsics.cuda()
+        disps = disps.cuda()
 
         # image = torch.from_numpy(image).permute(2,0,1).cuda()
         # intrinsics = torch.from_numpy(intrinsics).cuda()

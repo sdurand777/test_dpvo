@@ -11,14 +11,14 @@ from plyfile import PlyElement, PlyData
 from dpvo.utils import Timer
 from dpvo.dpvo import DPVO
 from dpvo.config import cfg
-from dpvo.stream import image_stream, video_stream, image_stream_stereo, image_stream_stereo_ivm
+from dpvo.stream import image_stream, video_stream, image_stream_stereo, image_stream_stereo_ivm, image_stream_mono_depth_ivm
 from dpvo.plot_utils import plot_trajectory, save_trajectory_tum_format
 
 import time
 
 SKIP = 0
 
-STEREO = True
+STEREO = False
 
 def show_image(image, t=0):
     image = image.permute(1, 2, 0).cpu().numpy()
@@ -37,28 +37,25 @@ def run(cfg, network, imagedir, calib, stride=0, skip=0, viz=False, timeit=False
     # else:
     #     reader = Process(target=video_stream, args=(queue, imagedir, calib, stride, skip))
 
-    reader = Process(target=image_stream_stereo_ivm, args=(queue, imagedir, calib, stride, skip))
+    reader = Process(target=image_stream_mono_depth_ivm, args=(queue, imagedir, stride, skip))
     reader.start()
 
     while 1:
-        (t, images, intrinsics) = queue.get()
+        (t, images, intrinsics, disps) = queue.get()
 
         print("image t : ", t)
 
         if t < 0: break
-    
-        # if STEREO:
-        #     if t > 700: break
-        # else:
-        if t > 430: break
-
+        if t > 440: break
         
         # mettre sur cuda 
         images = images.cuda()
         intrinsics = intrinsics.cuda()
+        disps = disps.cuda()
 
         # image = torch.from_numpy(image).permute(2,0,1).cuda()
         # intrinsics = torch.from_numpy(intrinsics).cuda()
+
 
         if slam is None:
             slam = DPVO(cfg, network, ht=images.shape[2], wd=images.shape[3], viz=viz, stereo=STEREO)
@@ -73,7 +70,7 @@ def run(cfg, network, imagedir, calib, stride=0, skip=0, viz=False, timeit=False
     el = PlyElement.describe(points, 'vertex',{'some_property': 'f8'},{'some_property': 'u4'})
 
     # Filtrer les points qui sont dans la distance maximale
-    max_distance = 5.0
+    max_distance = 3.0
 
     # Calculer la distance euclidienne des points par rapport à l'origine
     x = points['x']
@@ -89,14 +86,14 @@ def run(cfg, network, imagedir, calib, stride=0, skip=0, viz=False, timeit=False
                              {'x': 'f4', 'y': 'f4', 'z': 'f4', 'red': 'u1', 'green': 'u1', 'blue': 'u1'})
 
     ply_data = PlyData([el], text=True)
-    ply_data.write("output_test_stereo.ply")
+    ply_data.write("output_test.ply")
 
-    time.sleep(60)
+    time.sleep(30)
 
 
-    # for _ in range(12):
-    #     print("GLOBAL IT")
-    #     slam.update()
+    for _ in range(12):
+        print("GLOBAL IT")
+        slam.update()
 
 
 
@@ -121,7 +118,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--network', type=str, default='/home/smith/test_dpvo/dpvo.pth')
-    parser.add_argument('--imagedir', type=str, default='/home/smith/test_pipe/')
+    parser.add_argument('--imagedir', type=str)
     parser.add_argument('--calib', type=str)
     parser.add_argument('--stride', type=int, default=1)
     parser.add_argument('--skip', type=int, default=0)
@@ -136,8 +133,6 @@ if __name__ == '__main__':
 
     cfg.merge_from_file(args.config)
     cfg.BUFFER_SIZE = args.buffer
-
-    #import pdb; pdb.set_trace()
 
     print("Running with config...")
     print(cfg)

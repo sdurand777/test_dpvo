@@ -215,8 +215,22 @@ class Patchifier(nn.Module):
 
         if DEBUG: import pdb; pdb.set_trace()
 
+
+        #import pdb; pdb.set_trace()
+
         if disps is None:
             disps = torch.ones(b, n, h, w, device="cuda")
+        else:
+            # grid 3, 132, 240 pour recuperer les indices pour els patches
+            disps = disps.unsqueeze(0).unsqueeze(0)
+# Diviser les dimensions par 4
+            new_height = disps.shape[2] // 4
+            new_width = disps.shape[3] // 4
+# Redimensionner l'image en divisant les dimensions par 4
+            disps_resized = F.interpolate(disps, size=(new_height, new_width), mode='bilinear', align_corners=False)
+            disps = disps_resized.to(fmap.device)
+
+
         # else:
         #     disps = altcorr.patchify(disps, 4*(coords + 0.5), 0).view(b, -1, P, P)
 
