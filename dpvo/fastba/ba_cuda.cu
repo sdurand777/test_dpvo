@@ -275,7 +275,7 @@ __global__ void reprojection_residuals_and_hessian(
 
         if (stereo)
         {
-            if (ix % 2 == 0 && jx == ix + 1)
+            if (ix == jx)
             {
                 tij[0] =  -0.15;
                 tij[1] =     0;
@@ -285,16 +285,6 @@ __global__ void reprojection_residuals_and_hessian(
                 qij[2] =     0;
                 qij[3] =     1;
             }
-            // else if (ix % 2 == 1 && jx == ix - 1)
-            // {
-            //     tij[0] =   0.1;
-            //     tij[1] =     0;
-            //     tij[2] =     0;
-            //     qij[0] =     0;
-            //     qij[1] =     0;
-            //     qij[2] =     0;
-            //     qij[3] =     1;
-            // }
         }
         else 
         {
@@ -309,22 +299,22 @@ __global__ void reprojection_residuals_and_hessian(
 
         }
             
-        if (ix == 0 && jx == 1)
-        {
-            // Affichage de tij
-            printf("tij: ");
-            for (int i = 0; i < 3; ++i) {
-                printf("%f ", tij[i]);
-            }
-            printf("\n");
-
-            // Affichage de qij
-            printf("qij: ");
-            for (int i = 0; i < 4; ++i) {
-                printf("%f ", qij[i]);
-            }
-            printf("\n");
-        }
+        // if (ix == 0 && jx == 1)
+        // {
+        //     // Affichage de tij
+        //     printf("tij: ");
+        //     for (int i = 0; i < 3; ++i) {
+        //         printf("%f ", tij[i]);
+        //     }
+        //     printf("\n");
+        //
+        //     // Affichage de qij
+        //     printf("qij: ");
+        //     for (int i = 0; i < 4; ++i) {
+        //         printf("%f ", qij[i]);
+        //     }
+        //     printf("\n");
+        // }
 
 
         // apply transfo to get 3D point in frame j

@@ -561,10 +561,10 @@ class DPVO:
 
                 #import pdb; pdb.set_trace()
 
-                # fastba.BA(self.poses, self.patches, self.intrinsics, 
-                #     target, weight, lmbda, self.ii, self.jj, self.kk, t0, self.n, 2, self.stereo)
                 fastba.BA(self.poses, self.patches, self.intrinsics, 
-                    target, weight, lmbda, self.ii, self.jj, self.kk, t0, self.n, 2)
+                    target, weight, lmbda, self.ii, self.jj, self.kk, t0, self.n, 2, self.stereo)
+                # fastba.BA(self.poses, self.patches, self.intrinsics, 
+                #     target, weight, lmbda, self.ii, self.jj, self.kk, t0, self.n, 2)
 
                 #import pdb; pdb.set_trace()
 
