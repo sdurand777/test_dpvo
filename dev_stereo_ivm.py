@@ -32,11 +32,6 @@ def run(cfg, network, imagedir, calib, stride=0, skip=0, viz=False, timeit=False
     queue = Queue(maxsize=8)
     disps = None
 
-    # if os.path.isdir(imagedir):
-    #     reader = Process(target=image_stream, args=(queue, imagedir, calib, stride, skip))
-    # else:
-    #     reader = Process(target=video_stream, args=(queue, imagedir, calib, stride, skip))
-
     reader = Process(target=image_stream_stereo_ivm, args=(queue, imagedir, calib, stride, skip))
     reader.start()
 
@@ -66,6 +61,20 @@ def run(cfg, network, imagedir, calib, stride=0, skip=0, viz=False, timeit=False
         #with Timer("SLAM", enabled=timeit):
         slam(t, images, disps, intrinsics)
 
+
+# Extract the translation vectors (first three elements)
+    t1 = slam.poses[0, slam.n][:3]
+    t2 = slam.poses[0, 0][:3]
+
+    print("slam.n ", slam.n)
+    print("t1 ", t1)
+    print("t2 ", t2)
+
+# Compute the Euclidean distance (norm)
+    translation_norm = torch.norm(t1 - t2)
+    print("TRANSLATION POSES")
+    print(translation_norm)
+
     points = slam.points_.cpu().numpy()[:slam.m]
     colors = slam.colors_.view(-1, 3).cpu().numpy()[:slam.m]
     points = np.array([(x,y,z,r,g,b) for (x,y,z),(r,g,b) in zip(points, colors)],
@@ -91,19 +100,17 @@ def run(cfg, network, imagedir, calib, stride=0, skip=0, viz=False, timeit=False
     ply_data = PlyData([el], text=True)
     ply_data.write("output_test_stereo.ply")
 
+
+    import pdb; pdb.set_trace()
+
+    reader.join()
+
     time.sleep(60)
 
 
     # for _ in range(12):
     #     print("GLOBAL IT")
     #     slam.update()
-
-
-
-
-    reader.join()
-
-
 
 
     if save_reconstruction:

@@ -325,50 +325,52 @@ std::vector<torch::Tensor> corr_cuda_forward(
 
 
 std::vector<torch::Tensor> corr_stereo_cuda(
-  torch::Tensor fmap1,
-  torch::Tensor fmap2,
-  torch::Tensor fmap2_right,
-  torch::Tensor coords,
-  torch::Tensor ii,
-  torch::Tensor jj,
-  torch::Tensor kk,
-  int radius)
+        torch::Tensor fmap1,
+        torch::Tensor fmap2,
+        torch::Tensor fmap2_right,
+        torch::Tensor coords,
+        torch::Tensor ii,
+        torch::Tensor jj,
+        torch::Tensor kk,
+        int radius)
 {
-  const int B = coords.size(0);
-  const int M = coords.size(1);
+    std::cout << "corr stereo cuda" << std::endl;
 
-  const int H = coords.size(3);
-  const int W = coords.size(4);
-  const int D = 2 * radius + 2;
+    const int B = coords.size(0);
+    const int M = coords.size(1);
 
-  auto opts = fmap1.options();
-  auto corr = torch::empty({B, M, D, D, H, W}, opts);
+    const int H = coords.size(3);
+    const int W = coords.size(4);
+    const int D = 2 * radius + 2;
 
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(fmap1.type(), "corr_stereo_kernel", ([&] {
-      corr_stereo_kernel<scalar_t><<<BLOCKS(B * M * H * W * D * D), THREADS>>>(radius,
-        fmap1.packed_accessor32<scalar_t,5,torch::RestrictPtrTraits>(),
-        fmap2.packed_accessor32<scalar_t,5,torch::RestrictPtrTraits>(),
-        fmap2_right.packed_accessor32<scalar_t,5,torch::RestrictPtrTraits>(),
-        coords.packed_accessor32<float,5,torch::RestrictPtrTraits>(),
-        ii.packed_accessor32<long,1,torch::RestrictPtrTraits>(),
-        jj.packed_accessor32<long,1,torch::RestrictPtrTraits>(),
-        kk.packed_accessor32<long,1,torch::RestrictPtrTraits>(),
-        corr.packed_accessor32<scalar_t,6,torch::RestrictPtrTraits>());
-  }));
+    auto opts = fmap1.options();
+    auto corr = torch::empty({B, M, D, D, H, W}, opts);
 
-  torch::Tensor x = coords.index({Slice(), Slice(), 0, None, None});
-  torch::Tensor y = coords.index({Slice(), Slice(), 1, None, None});
-  torch::Tensor dx = x - x.floor(); dx = dx.to(fmap1.dtype());
-  torch::Tensor dy = y - y.floor(); dy = dy.to(fmap2.dtype());
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(fmap1.type(), "corr_stereo_kernel", ([&] {
+                corr_stereo_kernel<scalar_t><<<BLOCKS(B * M * H * W * D * D), THREADS>>>(radius,
+                        fmap1.packed_accessor32<scalar_t,5,torch::RestrictPtrTraits>(),
+                        fmap2.packed_accessor32<scalar_t,5,torch::RestrictPtrTraits>(),
+                        fmap2_right.packed_accessor32<scalar_t,5,torch::RestrictPtrTraits>(),
+                        coords.packed_accessor32<float,5,torch::RestrictPtrTraits>(),
+                        ii.packed_accessor32<long,1,torch::RestrictPtrTraits>(),
+                        jj.packed_accessor32<long,1,torch::RestrictPtrTraits>(),
+                        kk.packed_accessor32<long,1,torch::RestrictPtrTraits>(),
+                        corr.packed_accessor32<scalar_t,6,torch::RestrictPtrTraits>());
+                }));
 
-  // bilinear interpolation
-  torch::Tensor out;
-  out  = (1 - dx) * (1 - dy) * corr.index({Slice(), Slice(), Slice(0, D-1), Slice(0, D-1)});
-  out +=     (dx) * (1 - dy) * corr.index({Slice(), Slice(), Slice(0, D-1), Slice(1, D-0)});
-  out += (1 - dx) *     (dy) * corr.index({Slice(), Slice(), Slice(1, D-0), Slice(0, D-1)});
-  out +=     (dx) *     (dy) * corr.index({Slice(), Slice(), Slice(1, D-0), Slice(1, D-0)});
+    torch::Tensor x = coords.index({Slice(), Slice(), 0, None, None});
+    torch::Tensor y = coords.index({Slice(), Slice(), 1, None, None});
+    torch::Tensor dx = x - x.floor(); dx = dx.to(fmap1.dtype());
+    torch::Tensor dy = y - y.floor(); dy = dy.to(fmap2.dtype());
 
-  return { out.permute({0,1,3,2,4,5}) };
+    // bilinear interpolation
+    torch::Tensor out;
+    out  = (1 - dx) * (1 - dy) * corr.index({Slice(), Slice(), Slice(0, D-1), Slice(0, D-1)});
+    out +=     (dx) * (1 - dy) * corr.index({Slice(), Slice(), Slice(0, D-1), Slice(1, D-0)});
+    out += (1 - dx) *     (dy) * corr.index({Slice(), Slice(), Slice(1, D-0), Slice(0, D-1)});
+    out +=     (dx) *     (dy) * corr.index({Slice(), Slice(), Slice(1, D-0), Slice(1, D-0)});
+
+    return { out.permute({0,1,3,2,4,5}) };
 }
 
 
