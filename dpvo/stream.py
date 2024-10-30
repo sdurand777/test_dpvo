@@ -129,7 +129,7 @@ def image_stream_stereo(queue, imagedir, calib, stride, skip=0):
 
         # Vérifier si la queue est pleine avant de mettre des éléments
         if not queue.full():
-            queue.put((t, images, intrinsics))
+            queue.put((t, images.cpu(), intrinsics.cpu()))
         else:
             print("La queue est pleine, attente pour la mise en file.")
             while queue.full():
@@ -138,12 +138,12 @@ def image_stream_stereo(queue, imagedir, calib, stride, skip=0):
     # Envoyer le signal de fin de traitement
     try:
         if not queue.full():
-            queue.put((-1, images, intrinsics))
+            queue.put((-1, images.cpu(), intrinsics.cpu()))
         else:
             print("La queue est pleine, attente pour l'envoi du signal de fin.")
             while queue.full():
                 pass  # Attendre que la queue ne soit plus pleine
-            queue.put((-1, images, intrinsics))
+            queue.put((-1, images.cpu(), intrinsics.cpu()))
     except Exception as e:
         print(f"Erreur lors de l'envoi du signal de fin: {e}")
 
@@ -202,24 +202,11 @@ def image_stream_stereo_ivm(queue, imagedir, calib, stride, skip=0):
     intrinsics_vec = [322.6092376708984, 322.6092376708984, 257.7363166809082, 186.6225147247314]
     ht0, wd0 = [376, 514]
 
-
-    # # Charger les paramètres de calibration
-    # calib = np.loadtxt(calib, delimiter=" ")
-    # fx, fy, cx, cy = calib[:4]
-
     K = np.eye(3)
     K[0, 0] = intrinsics_vec[0]
     K[0, 2] = intrinsics_vec[2]
     K[1, 1] = intrinsics_vec[1]
     K[1, 2] = intrinsics_vec[3]
-
-    # img_exts = ["*.png", "*.jpeg", "*.jpg"]
-    # image_list = sorted(chain.from_iterable(Path(imagedir).glob(e) for e in img_exts))[skip::stride]
-
-    # # liste left and right
-    # image_list_l = sorted(glob.glob(os.path.join(imagedir, 'image_left', '*.png')))[::stride]
-    # image_list_r = sorted(glob.glob(os.path.join(imagedir, 'image_right', '*.png')))[::stride]
-
 
     # recuperation nom images
     image_list_l = sorted(glob.glob(os.path.join(imagedir, 'left', '*.JPG')))[::stride]
@@ -228,11 +215,8 @@ def image_stream_stereo_ivm(queue, imagedir, calib, stride, skip=0):
 
     for t, (imfile_l, imfile_r) in enumerate(zip(image_list_l,image_list_r)):
         # read all png images in folder
-        #print("------- image paths ------")
         images_left = imfile_l
-        #print(images_left)
         images_right = imfile_r
-        #print(images_right)
         images = [cv2.remap(cv2.imread(images_left), map_l[0], map_l[1], interpolation=cv2.INTER_LINEAR)]
 
         images += [cv2.remap(cv2.imread(images_right), map_r[0], map_r[1], interpolation=cv2.INTER_LINEAR)]
@@ -246,28 +230,6 @@ def image_stream_stereo_ivm(queue, imagedir, calib, stride, skip=0):
         intrinsics[1] *= image_size[0] / ht0
         intrinsics[2] *= image_size[1] / wd0
         intrinsics[3] *= image_size[0] / ht0
-
-        # images_left = imfile_l
-        # images_right = imfile_r
-        #
-        # img = cv2.imread(images_left)
-        # ht0, wd0, _ = img.shape
-        #
-        # images = [cv2.imread(images_left)]
-        #
-        # tmp = torch.from_numpy(np.stack(images, 0))
-        #
-        # images += [cv2.imread(images_right)]
-        #
-        # images = torch.from_numpy(np.stack(images, 0))
-        #
-        # images = images.permute(0, 3, 1, 2)
-        # images = F.interpolate(images, image_size, mode="bilinear", align_corners=False)
-        # intrinsics = torch.as_tensor(intrinsics_vec)
-        # intrinsics[0] *= image_size[1] / wd0
-        # intrinsics[1] *= image_size[0] / ht0
-        # intrinsics[2] *= image_size[1] / wd0
-        # intrinsics[3] *= image_size[0] / ht0
 
         # Vérifier si la queue est pleine avant de mettre des éléments
         if not queue.full():

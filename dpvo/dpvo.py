@@ -505,13 +505,13 @@ class DPVO:
             # calculer toutes les reprojection pour le graph
             # coords shape [1, 6144, 2, 3, 3]
             #import pdb; pdb.set_trace()
-            coords = self.reproject(stereo=self.stereo)
-            #coords = self.reproject()
+            #coords = self.reproject(stereo=self.stereo)
+            coords = self.reproject()
 
             with autocast(enabled=True):
                 # gestion du cas stereo
-                corr = self.corr(coords, stereo=self.stereo)
-                #corr = self.corr(coords)
+                #corr = self.corr(coords, stereo=self.stereo)
+                corr = self.corr(coords)
 
                 # uniquement context de gauche pour rappel
                 ctx = self.imap[:,self.kk % (self.M * self.mem)]
@@ -561,10 +561,10 @@ class DPVO:
 
                 #import pdb; pdb.set_trace()
 
-                fastba.BA(self.poses, self.patches, self.intrinsics, 
-                    target, weight, lmbda, self.ii, self.jj, self.kk, t0, self.n, 2, self.stereo)
                 # fastba.BA(self.poses, self.patches, self.intrinsics, 
-                #     target, weight, lmbda, self.ii, self.jj, self.kk, t0, self.n, 2)
+                #     target, weight, lmbda, self.ii, self.jj, self.kk, t0, self.n, 2, self.stereo)
+                fastba.BA(self.poses, self.patches, self.intrinsics, 
+                    target, weight, lmbda, self.ii, self.jj, self.kk, t0, self.n, 2)
 
                 #import pdb; pdb.set_trace()
 
@@ -656,17 +656,6 @@ class DPVO:
                                             return_color=True,
                                             stereo=self.stereo)
 
-                #import pdb; pdb.set_trace()
-
-                # # recuperer info image droite
-                # fmap_right, gmap_right, imap_right, patches_right, _, clr_right = \
-                #         self.network.patchify(  image[:,:,1],
-                #                             disp,
-                #                             patches_per_image=self.cfg.PATCHES_PER_FRAME, 
-                #                             gradient_bias=self.cfg.GRADIENT_BIAS, 
-                #                             return_color=True,
-                #                             stereo=self.stereo)
-
             else:
                 # info image system monoculaire
                 fmap, gmap, imap, patches, _, clr = \
@@ -712,14 +701,13 @@ class DPVO:
                 tvec_qvec = self.poses[self.n-1]
                 self.poses_[self.n] = tvec_qvec
 
-
         # Utiliser la stereo pour initialiser la depth mieux et des le debut
 
         # TODO better depth initialization
-        # patches[:,:,2] = torch.rand_like(patches[:,:,2,0,0,None,None])
-        # if self.is_initialized:
-        #     s = torch.median(self.patches_[self.n-3:self.n,:,2])
-        #     patches[:,:,2] = s
+        patches[:,:,2] = torch.rand_like(patches[:,:,2,0,0,None,None])
+        if self.is_initialized:
+            s = torch.median(self.patches_[self.n-3:self.n,:,2])
+            patches[:,:,2] = s
 
         self.patches_[self.n] = patches
 
@@ -762,7 +750,6 @@ class DPVO:
             self.is_initialized = True            
 
             #import pdb; pdb.set_trace()
-
             # 12 iterations update
             for itr in range(12):
                 self.update()

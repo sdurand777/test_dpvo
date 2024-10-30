@@ -15,6 +15,8 @@ from dpvo.stream import image_stream, video_stream, image_stream_stereo
 
 from dpvo.plot_utils import plot_trajectory, save_trajectory_tum_format
 
+import time
+
 SKIP = 0
 
 STEREO = True
@@ -39,11 +41,29 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
     reader = Process(target=image_stream_stereo, args=(queue, imagedir, calib, stride, skip))
     reader.start()
 
-    while 1:
-        (t, images, intrinsics) = queue.get()
-        if t < 0: break
 
+    imagedir_img = imagedir+"/image_left/"
+    number_of_images = len([file for file in os.listdir(imagedir_img) if file.endswith('.png')])
         
+    print("number_of_images : ", number_of_images)
+
+    import pdb; pdb.set_trace()
+
+    while 1:
+
+        (t, images, intrinsics) = queue.get()
+
+        print("image t : ", t)
+        import pdb; pdb.set_trace()
+
+        if t < 0: 
+            import pdb; pdb.set_trace()
+            break
+
+        if t >= number_of_images-5:
+            import pdb; pdb.set_trace()
+            break
+
         # mettre sur cuda 
         images = images.cuda()
         intrinsics = intrinsics.cuda()
@@ -58,8 +78,14 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
         #with Timer("SLAM", enabled=timeit):
         slam(t, images, disps, intrinsics)
 
-    for _ in range(12):
-        slam.update()
+    print("--- tracking termine ---")
+
+    # for _ in range(12):
+    #     slam.update()
+
+    
+    time.sleep(30)
+
 
     reader.join()
 
